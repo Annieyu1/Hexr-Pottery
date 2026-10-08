@@ -3,6 +3,7 @@
     "com.meta.xr.sdk.all": "205.0.0",
     "com.microtube.hexr": "https://github.com/MicrotubeTechnologies/com.microtube.hexr.git#v0.9.3",
     "com.unity.2d.sprite": "1.0.0",
+    "com.unity.cloud.gltfast": "6.20.0",
     "com.unity.collab-proxy": "2.13.6",
     "com.unity.editorcoroutines": "6.6.0",
     "com.unity.ext.nunit": "2.1.0",
