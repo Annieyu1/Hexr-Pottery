@@ -85,3 +85,8 @@ crashlytics-build.properties
 # Emitted by com.unity.xr.openxr during a build.
 /[Aa]ssets/[Ss]treamingAssets/RuntimeActionBindings.json
 /[Aa]ssets/[Ss]treamingAssets/RuntimeActionBindings.json.meta
+
+# macOS / editor
+.DS_Store
+.vscode/
+*.slnx
