@@ -6,8 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/1.Basic Tutorial.unity
-    guid: e62332fc83a09fb478fc485e32fbb268
+    path: Assets/Scenes/Meta.unity
+    guid: 450b19f5795a34164a81f6d23c97b115
   - enabled: 1
     path: Assets/Scenes/2.Hospital Tutorial.unity
     guid: 7c2c75f60ac0d0c46a27492a5002e9bb
