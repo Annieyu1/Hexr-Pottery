@@ -14,6 +14,7 @@
 | [04-game-design.md](04-game-design.md) | 三个小游戏、难度分级、视觉辅助淡出、反馈与防挫败、美术方向 | 草案 v0.1 |
 | [05-data-and-clinical.md](05-data-and-clinical.md) | 数据记录方案、数据格式、治疗师界面、临床量表、伦理 | 草案 v0.1 |
 | [06-repo-and-workflow.md](06-repo-and-workflow.md) | Git 仓库结构、分支、提交规范、资产管理 | 草案 v0.1 |
+| [07-m0-cleanup.md](07-m0-cleanup.md) | **M0 任务定义**与可删除清单 | 待你确认 |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | **未决问题清单**(按"向谁确认"分类) | 持续更新 |
 | [FUTURE_WORK.md](FUTURE_WORK.md) | 后续工作:咨询治疗师、文献阅读、自适应分级等 | 持续更新 |
 

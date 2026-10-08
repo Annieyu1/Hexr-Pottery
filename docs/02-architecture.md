@@ -105,6 +105,24 @@ Quest 上 `persistentDataPath` 为 `/sdcard/Android/data/<包名>/files`,可通�
 5. **蓝牙连接稳定性**:断连要暂停试次、提示、恢复后重做该试次,并记录事件。
 6. **避免触觉反馈干扰**:当前不做触觉反馈(决策),保证被测刺激的纯净。
 
+## 7.1 复用教程的 Interactable(2026-10-08)
+
+教程里的"可抓取 + 有触觉"物体已经满足游戏 1 的需要,**不另造轮子**:
+
+```
+物体
+ ├─ Grabbable            (Meta Interaction SDK:可被抓取/移动)
+ ├─ HandGrabInteractable (Meta Interaction SDK:手抓取判定)
+ └─ HexRInteractableHaptics (HexR:抓取时给手套施加压力)
+      fireOn = Select,  followGrip = false,  strength = 10~60
+      thumb/index/middle/ring/pinky/palm 全开 → 整只手感受
+```
+
+- `followGrip = false`:压力由**物体**决定,不随患者握力变化,这才是被测刺激。
+- 需把 ring、pinky、palm 都打开才是"整只手"。
+- 我们的代码只做"配置层":`PressureObject`(取代 `ForceBall`)在每个试次把 `strength` 设为刺激值,并向 `TrialRunner` 报告"被抓取/被松开/抓取次数/时长"。
+- 触觉输出走 `HexRInteractableHaptics`,而非自己调 `HaptGloveHandler`;`IHapticDevice` 保留给游戏 2、3(振动、单指定位)以及模拟手套。
+
 ## 8. 测试策略
 
 - **编辑器内**:`SimulatedGlove` + 键盘/鼠标或 Meta XR Simulator 完成全部流程;单元测试覆盖 `StaircaseProcedure`、`DataLogger`、刺激生成(Unity Test Framework 已在依赖里)。
