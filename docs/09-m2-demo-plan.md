@@ -194,3 +194,40 @@ Idle(开始界面) ──Start──► Playing ◄──Resume── Paused
 
 ## 13. 之后
 Demo 玩法确认 → 纯 C# 类迁入 Core(M1 雏形)→ 场景美术与世界观 → 3AFC 中级 → 治疗师界面与会话流程(M3)。
+
+## 14. 脚本框架(2026-10-08 已写,未在 Unity 中编译验证)
+
+位置:`Assets/PressureDemo/Scripts/`,命名空间 `HexRMeta.Pressure`,不改场景、不动 Stage3 旧脚本。
+
+### 逻辑层(纯 C#,以后可搬进 Core)
+| 文件 | 职责 |
+|---|---|
+| `PressureSettings.cs` | 全部可调参数(难度档、强度表、计时、停留确认、提示等待、受试者 ID、手别)+ `Side` 枚举 |
+| `PressureTrial.cs` | 一个试次的刺激与反应数据 |
+| `TrialGenerator.cs` | 固定难度下随机 S、左右随机、同侧不超过 3 次 |
+| `SessionClock.cs` | 只累计 Playing 时间,上限 10 分钟,`Format()` 显示 mm:ss |
+| `GameFlow.cs` | Idle / Playing / Paused / Ended 状态机,拒绝非法跳转 |
+| `TrialLogger.cs` | 逐试次 CSV(逐行 flush)+ 会话 JSON,存 `persistentDataPath/pressure_sessions/` |
+
+### Unity 层
+| 文件 | 挂在哪 | 职责 |
+|---|---|---|
+| `PressureObject.cs` | 两个物体各一个 | 设置压力;抓取/松开事件;抓握次数与时长;松手回底座;锁定时手套静音 |
+| `AnswerZone.cs` | "更强"感应垫(Trigger) | 松手后停留确认才算作答;拿出重选计"改主意" |
+| `HintController.cs` | 提示物体 | 首个试次必出,10 秒无抓取出现,抓取即消失 |
+| `ControlPanel.cs` | 控制面板 | Start/Pause/Resume/End/Replay 按钮钩子、计时、提示语、汇总 |
+| `FeedbackPresenter.cs` | 任意物体 | 文字 + 音效 + 特效;错误后让正确物体发光 |
+| `PressureGameController.cs` | 场景里一个空物体 | 总控:串起以上所有,驱动试次循环、暂停/恢复/结束、写数据 |
+
+### 接线清单(你在 Unity 里做,之后)
+1. **每个物体**(左、右):挂 `PressureObject`(同物体上必须已有 `Grabbable`、`HexRInteractableHaptics`);`Side` 选 Left/Right;`Interactables` 拖入它的 `HandGrabInteractable` 子物体;`Highlight Visual` 可拖一个发光子物体(可空);
+2. **感应垫**:加 Collider 并勾 Is Trigger,挂 `AnswerZone`;`Dwell Indicator` 可空;
+3. **提示物体**:挂 `HintController`,`Hint Visuals` 拖入图标/发光/文字,`Pulse Targets` 可空;
+4. **控制面板**:挂 `ControlPanel`,四个状态面板和三处文字拖入;**每个按钮的戳事件**(Poke 的 UnityEvent 或 UI Button.onClick)分别连到 `OnStartPressed / OnPausePressed / OnResumePressed / OnEndPressed / OnReplayPressed`;
+5. **反馈**:挂 `FeedbackPresenter`,文字、AudioSource、音效、粒子可逐项拖(都可空);
+6. **总控**:空物体挂 `PressureGameController`,把左右物体、感应垫、提示、面板、反馈拖入;`Settings` 里设受试者 ID、手别、难度档(1–6)。
+
+### 已知缺口(框架里留了位置)
+- 手套断连处理:`PressureTrial.disconnected` 已预留,还没接 HexR 连接事件;
+- 暂停面板里的"重新开始"按钮:目前由 Replay 流程覆盖(结束 → Replay);
+- 单元测试(`TrialGenerator`、`SessionClock`、`GameFlow`)还没写。
