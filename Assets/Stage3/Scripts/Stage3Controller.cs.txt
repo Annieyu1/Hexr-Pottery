@@ -1,0 +1,471 @@
+using System.Collections;
+using TMPro;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class Stage3Controller : MonoBehaviour
+{
+    public enum Stage3State
+    {
+        Ready,
+        Playing,
+        Result
+    }
+
+    [Header("Sorting Zones")]
+    [SerializeField]
+    private FruitSortingZone[] sortingZones;
+
+    [Header("Fruit Groups")]
+    [SerializeField]
+    private GameObject[] fruitGroups;
+
+    [Header("Timer UI")]
+    [SerializeField]
+    private GameObject timerCanvas;
+
+    [SerializeField]
+    private TMP_Text timerText;
+
+    [Header("Status UI")]
+    [SerializeField]
+    private GameObject statusCanvas;
+
+    [SerializeField]
+    private TMP_Text statusText;
+
+    [Header("Final Result UI")]
+    [SerializeField]
+    private GameObject resultCanvas;
+
+    [SerializeField]
+    private TMP_Text resultTitle;
+
+    [SerializeField]
+    private TMP_Text resultScore;
+
+    [Header("Stage UI")]
+    [SerializeField]
+    private GameObject startCanvas;
+
+    [SerializeField]
+    private GameObject instructionObject;
+
+    [Header("Timing")]
+    [SerializeField]
+    private float confirmTime = 1f;
+
+    [SerializeField]
+    private float groupResultDisplayTime = 2f;
+
+    [Header("Runtime")]
+    [SerializeField]
+    private Stage3State currentState;
+
+    [SerializeField]
+    private int currentGroupIndex;
+
+    [SerializeField]
+    private int totalScore;
+
+    [SerializeField]
+    private int completedGroups;
+
+    [SerializeField]
+    private float elapsedTime;
+
+    private bool timerRunning;
+    private bool evaluating;
+    private bool groupCompleted;
+
+    private int CurrentGroupNumber => currentGroupIndex + 1;
+
+    private int TotalGroupCount =>
+        fruitGroups == null ? 0 : fruitGroups.Length;
+
+    private void Start()
+    {
+        PrepareStage3();
+    }
+
+    private void Update()
+    {
+        if (currentState != Stage3State.Playing)
+            return;
+
+        if (timerRunning)
+        {
+            elapsedTime += Time.deltaTime;
+            UpdateTimerUI();
+        }
+
+        if (groupCompleted || evaluating)
+            return;
+
+        if (AllZonesFilled())
+        {
+            StartCoroutine(ConfirmAndEvaluate());
+        }
+    }
+
+    private void PrepareStage3()
+    {
+        currentState = Stage3State.Ready;
+
+        timerRunning = false;
+        evaluating = false;
+        groupCompleted = false;
+
+        currentGroupIndex = 0;
+        totalScore = 0;
+        completedGroups = 0;
+        elapsedTime = 0f;
+
+        ClearAllZones();
+        SetAllGroupsActive(false);
+
+        if (startCanvas != null)
+            startCanvas.SetActive(true);
+
+        if (timerCanvas != null)
+            timerCanvas.SetActive(false);
+
+        if (statusCanvas != null)
+            statusCanvas.SetActive(false);
+
+        if (resultCanvas != null)
+            resultCanvas.SetActive(false);
+
+        if (instructionObject != null)
+            instructionObject.SetActive(false);
+
+        UpdateTimerUI();
+
+        Debug.Log("[Stage3] Ready");
+    }
+
+    public void StartGame()
+    {
+        if (currentState != Stage3State.Ready)
+            return;
+
+        if (!ValidateConfiguration())
+            return;
+
+        currentState = Stage3State.Playing;
+
+        currentGroupIndex = 0;
+        totalScore = 0;
+        completedGroups = 0;
+        elapsedTime = 0f;
+
+        evaluating = false;
+        groupCompleted = false;
+        timerRunning = true;
+
+        ClearAllZones();
+        SetAllGroupsActive(false);
+        SetCurrentGroupActive(true);
+
+        if (startCanvas != null)
+            startCanvas.SetActive(false);
+
+        if (timerCanvas != null)
+            timerCanvas.SetActive(true);
+
+        if (statusCanvas != null)
+            statusCanvas.SetActive(false);
+
+        if (resultCanvas != null)
+            resultCanvas.SetActive(false);
+
+        UpdateTimerUI();
+        StartCurrentGroup();
+
+        Debug.Log("[Stage3] Started");
+    }
+
+    private bool ValidateConfiguration()
+    {
+        if (sortingZones == null || sortingZones.Length != 3)
+        {
+            Debug.LogError(
+                "[Stage3] Exactly three sorting zones are required."
+            );
+
+            return false;
+        }
+
+        foreach (FruitSortingZone zone in sortingZones)
+        {
+            if (zone == null)
+            {
+                Debug.LogError(
+                    "[Stage3] A sorting zone is missing."
+                );
+
+                return false;
+            }
+        }
+
+        if (fruitGroups == null || fruitGroups.Length == 0)
+        {
+            Debug.LogError(
+                "[Stage3] At least one fruit group is required."
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private void StartCurrentGroup()
+    {
+        evaluating = false;
+        groupCompleted = false;
+
+        if (instructionObject != null)
+            instructionObject.SetActive(true);
+
+        if (statusCanvas != null)
+            statusCanvas.SetActive(false);
+
+        Debug.Log(
+            $"[Stage3] Group {CurrentGroupNumber} started."
+        );
+    }
+
+    private bool AllZonesFilled()
+    {
+        if (sortingZones == null || sortingZones.Length != 3)
+            return false;
+
+        foreach (FruitSortingZone zone in sortingZones)
+        {
+            if (zone == null || !zone.IsOccupied)
+                return false;
+        }
+
+        return true;
+    }
+
+    private IEnumerator ConfirmAndEvaluate()
+    {
+        evaluating = true;
+
+        if (statusText != null)
+        {
+            statusText.text =
+                $"Group {CurrentGroupNumber} / {TotalGroupCount}\n" +
+                "All objects placed...";
+        }
+
+        yield return new WaitForSeconds(confirmTime);
+
+        if (!AllZonesFilled())
+        {
+            evaluating = false;
+
+            if (statusText != null)
+            {
+                statusText.text =
+                    $"Group {CurrentGroupNumber} / {TotalGroupCount}\n" +
+                    "Compare and sort the objects";
+            }
+
+            yield break;
+        }
+
+        EvaluateCurrentGroup();
+    }
+
+    private void EvaluateCurrentGroup()
+    {
+        int groupScore = 0;
+
+        foreach (FruitSortingZone zone in sortingZones)
+        {
+            if (zone != null && zone.IsCorrect)
+            {
+                groupScore++;
+            }
+        }
+
+        totalScore += groupScore;
+        completedGroups++;
+
+        groupCompleted = true;
+        evaluating = false;
+
+        if (instructionObject != null)
+            instructionObject.SetActive(false);
+
+        if (statusText != null)
+        {
+            statusText.text =
+                $"Group {CurrentGroupNumber} Complete\n" +
+                $"Score: {groupScore} / {sortingZones.Length}";
+        }
+
+        if (statusCanvas != null)
+            statusCanvas.SetActive(true);
+
+        Debug.Log(
+            $"[Stage3] Group {CurrentGroupNumber}: " +
+            $"{groupScore}/{sortingZones.Length}"
+        );
+
+        StartCoroutine(ContinueAfterGroup());
+    }
+
+    private IEnumerator ContinueAfterGroup()
+    {
+        yield return new WaitForSeconds(
+            groupResultDisplayTime
+        );
+
+        if (currentGroupIndex >= TotalGroupCount - 1)
+        {
+            FinishStage3();
+            yield break;
+        }
+
+        SetCurrentGroupActive(false);
+
+        yield return new WaitForFixedUpdate();
+
+        ClearAllZones();
+
+        currentGroupIndex++;
+
+        SetCurrentGroupActive(true);
+
+        yield return new WaitForFixedUpdate();
+
+        StartCurrentGroup();
+    }
+
+    private void SetAllGroupsActive(bool active)
+    {
+        if (fruitGroups == null)
+            return;
+
+        foreach (GameObject group in fruitGroups)
+        {
+            if (group != null)
+            {
+                group.SetActive(active);
+            }
+        }
+    }
+
+    private void SetCurrentGroupActive(bool active)
+    {
+        if (
+            fruitGroups == null ||
+            currentGroupIndex < 0 ||
+            currentGroupIndex >= fruitGroups.Length
+        )
+        {
+            return;
+        }
+
+        GameObject group = fruitGroups[currentGroupIndex];
+
+        if (group != null)
+        {
+            group.SetActive(active);
+        }
+    }
+
+    private void ClearAllZones()
+    {
+        if (sortingZones == null)
+            return;
+
+        foreach (FruitSortingZone zone in sortingZones)
+        {
+            if (zone != null)
+            {
+                zone.ClearZone();
+            }
+        }
+    }
+
+    private void UpdateTimerUI()
+    {
+        if (timerText == null)
+            return;
+
+        int totalSeconds =
+            Mathf.FloorToInt(elapsedTime);
+
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+
+        timerText.text =
+            minutes.ToString("00") +
+            ":" +
+            seconds.ToString("00");
+    }
+
+    private void FinishStage3()
+    {
+        currentState = Stage3State.Result;
+        timerRunning = false;
+
+        UpdateTimerUI();
+        SetCurrentGroupActive(false);
+        ClearAllZones();
+
+        if (timerCanvas != null)
+            timerCanvas.SetActive(false);
+
+        if (statusCanvas != null)
+            statusCanvas.SetActive(false);
+
+        if (instructionObject != null)
+            instructionObject.SetActive(false);
+
+        if (resultCanvas != null)
+            resultCanvas.SetActive(true);
+
+        if (resultTitle != null)
+            resultTitle.text = "ACT COMPLETE";
+
+        int completedObjects =
+            completedGroups * sortingZones.Length;
+
+        int totalSeconds =
+            Mathf.FloorToInt(elapsedTime);
+
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+
+        if (resultScore != null)
+        {
+            resultScore.text =
+                "Accuracy\n" +
+                totalScore +
+                " / " +
+                completedObjects +
+                "\nTime\n" +
+                minutes.ToString("00") +
+                ":" +
+                seconds.ToString("00");
+        }
+
+        Debug.Log(
+            $"[Stage3] Complete: " +
+            $"{totalScore}/{completedObjects}"
+        );
+    }
+
+    public void ReplayStage3()
+    {
+        SceneManager.LoadScene(
+            SceneManager.GetActiveScene().name
+        );
+    }
+}

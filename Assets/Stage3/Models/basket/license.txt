@@ -1,0 +1,11 @@
+Model Information:
+* title:	basket
+* source:	https://sketchfab.com/3d-models/basket-8f9e0a23c2c643f0b1738f6ba38fc9c3
+* author:	turusaki (https://sketchfab.com/turusaki)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "basket" (https://sketchfab.com/3d-models/basket-8f9e0a23c2c643f0b1738f6ba38fc9c3) by turusaki (https://sketchfab.com/turusaki) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
