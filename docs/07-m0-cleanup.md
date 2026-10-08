@@ -1,6 +1,6 @@
 # 07 M0:清理与骨架
 
-版本:v0.1 草案 · 2026-10-08 · 状态:**待你确认后执行**(尚未删除任何文件)
+版本:v0.2 · 2026-10-08 · 状态:**暂不执行删除**(2026-10-08 用户决定);URP 迁移待决定
 
 ## 1. M0 的目标
 
@@ -76,6 +76,34 @@
 | 迁移成本 | — | 现在迁移小(几乎没有自己的材质);**美术堆起来之后迁移很痛** |
 
 由于你要大量找/改美术资产,**越早迁越省事**。建议 M0 做,材质统一转 URP。需要你确认(见 OPEN_QUESTIONS Q16)。
+
+### 4.1 迁移 URP 可能遇到的问题(针对本项目)
+
+本项目 `Meta.unity` 与 Stage3 可达的材质里,**几乎全是 Meta SDK 自带的自定义着色器**(OculusHand、UIStyleShader、RoundedPanelMesh、room/LightmapPBR/StencilSky 等示例着色器),没有太多 Standard 材质,所以"满屏粉红"的风险比一般项目小。但仍有这些点要逐项验证:
+
+| 风险 | 表现 | 处理 |
+|---|---|---|
+| 自定义着色器不兼容 URP | 手/UI 不显示或粉红 | Meta 的 Hand/UI 着色器官方支持 URP,**需真机确认**;示例着色器(room、LightmapPBR、StencilSky、MRDeskShadow)属于教程环境,本来就要替换,出问题可忽略 |
+| **透视(Passthrough)变黑** | 开了透视却是黑背景 | 常见原因:相机背景不是透明、URP 开了 HDR。需设相机 Clear=Solid Color、Alpha=0,URP Asset 关 HDR |
+| 后处理包冲突 | `com.unity.postprocessing`(v2)在 URP 不生效 | 移除该包,改用 URP Volume(Quest 上也尽量少用) |
+| 画质设置不适合 Quest | 帧率下降、发热 | URP Asset 建议:关 HDR、MSAA 4x、关 Depth/Opaque Texture、阴影级联 1 且距离短、不开 Soft Shadow |
+| 材质外观变化 | Standard→URP/Lit 后光照、金属感、光滑度不同 | 用 Render Pipeline Converter 转换,再手调;从现在起统一用 URP/Lit 或 Unlit |
+| 粒子/特效材质 | 旧粒子着色器粉红 | 换 URP 粒子着色器(教程特效在 `Tutorial/Art/Effects`,与我们无关) |
+| glTFast 运行时加载 | 构建后模型粉红 | 只在编辑器内导入则无事;若运行时加载 glTF,需确保着色器被打进包 |
+| TextMeshPro | 一般无问题 | 确认字体材质用 TMP 的 URP 兼容着色器 |
+| 首次构建慢 | 着色器编译变体多 | 一次性成本 |
+| 相机栈 | 多相机叠加时 XR 异常 | 尽量单相机 |
+
+触觉、抓取、数据记录与渲染管线**无关**,迁移不会影响手套功能。
+
+**预期工作量**:在专用分支 `chore/urp` 上,先用 `Meta.unity` 作为测试场景,按"编辑器 → Meta XR Simulator → Quest 真机"三级验证,约半天到一天。出问题可整支回退,不影响 `main`。
+
+**建议验收清单**
+- [ ] 编辑器 Game 视图:手、球、UI 文字正常
+- [ ] Meta XR Simulator:能抓球
+- [ ] Quest 3 真机:手模型可见、透视(如使用)正常、UI 文字清晰、帧率稳定(目标 72/90 Hz)
+- [ ] 手套:抓球有压力
+- [ ] Console 无着色器报错
 
 ## 5. 执行顺序(确认后)
 
