@@ -16,6 +16,7 @@
 | [06-repo-and-workflow.md](06-repo-and-workflow.md) | Git 仓库结构、分支、提交规范、资产管理 | 草案 v0.1 |
 | [07-m0-cleanup.md](07-m0-cleanup.md) | **M0 任务定义**与可删除清单 | 待你确认 |
 | [08-roadmap.md](08-roadmap.md) | **路线图**:里程碑、分工、决策关口、风险 | 草案 v0.1 |
+| [09-m2-demo-plan.md](09-m2-demo-plan.md) | **M2 压力 2AFC Demo**:现有代码评审、玩法规格、脚本清单、预试 | 待你确认 D1–D6 |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | **未决问题清单**(按"向谁确认"分类) | 持续更新 |
 | [FUTURE_WORK.md](FUTURE_WORK.md) | 后续工作:咨询治疗师、文献阅读、自适应分级等 | 持续更新 |
 
