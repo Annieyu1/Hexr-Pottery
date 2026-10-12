@@ -86,7 +86,7 @@ def _tex_mat(name, image, closest=False):
     return m
 
 
-def _small_copy(img, name):
+def _small_copy(img, name, out_dir):
     # build a fresh image from the pixels: .copy() of a packed image tries to re-read the (missing) temp file
     import numpy as np
     w, h = img.size
@@ -97,12 +97,16 @@ def _small_copy(img, name):
     c.pixels.foreach_set(buf)
     if max(w, h) > TEX_SIZE:
         c.scale(TEX_SIZE, TEX_SIZE)
-    c.pack()
+    # write to disk so the FBX exporter and Unity can use it (a generated image has no file otherwise)
+    c.filepath_raw = os.path.join(out_dir, name + ".png")
+    c.file_format = "PNG"
+    c.save()
     return c
 
 
 def apply_palette(names, out_dir):
     objs = [bpy.data.objects[n] for n in names]
+    os.makedirs(out_dir, exist_ok=True)
     meshes = []
     for o in objs:
         if o.data not in meshes:
@@ -120,7 +124,7 @@ def apply_palette(names, out_dir):
                 continue
             img = _base_image(m)
             if img:
-                textured[m] = _tex_mat("M_" + m.name.replace(" ", "_"), _small_copy(img, img.name + "_s"))
+                textured[m] = _tex_mat("M_" + m.name.replace(" ", "_"), _small_copy(img, os.path.splitext(img.name)[0] + "_s", out_dir))
             else:
                 key = tuple(_srgb8(c) for c in _plain_rgb(m))
                 colours.setdefault(key, len(colours))
