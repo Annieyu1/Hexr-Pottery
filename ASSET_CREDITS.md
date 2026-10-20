@@ -9,6 +9,10 @@ Only assets that ship in the game are listed here. Licences: CC0 / CC-BY only, n
 | 绿植 | Potted Plant, Mediterranean med leaf, low poly | dudecon | https://sketchfab.com/3d-models/bc7f26baef2a45d18dbd9a5d6d2ec565 | CC BY 4.0 | 缩放到 0.5 m;摆放位置调整 |
 | 台灯 | Vintage Desk lamp | Fromgf | https://sketchfab.com/3d-models/a4c4b5d53364473bb3c71b33963652b3 | CC BY 4.0 | 缩放到 0.4 m;摆放位置调整 |
 | 挂画 | Wall Decor - lowpoly art - wall paintings | totomori | https://sketchfab.com/3d-models/8ca1751e6e6847d9938421a7ea662a34 | CC BY 4.0 | 缩放;摆放位置调整 |
+| 花园的树 | Cute Toon Tree | matrixrex | https://sketchfab.com/3d-models/52d842280ec645d5a4cdb605952a5bf5 | CC BY 4.0 | 缩放到约 3 m;叶子重新上色(橄榄、青绿、粉色三种),树干改成暖棕色;摆放 8 棵 |
+| T1 界面字体 | Inter (Regular、Bold,18pt 静态字重) | Rasmus Andersson / The Inter Project Authors | https://fonts.google.com/specimen/Inter | SIL Open Font License 1.1(全文:`Assets/Learning/Art/Fonts/Inter-OFL.txt`) | 未修改字体文件;在 Unity 里生成 TextMeshPro 动态字体资源 |
+| T1 模型手 / 幽灵手 | OpenXRRightHand.fbx | Meta | Meta XR Core SDK(`com.meta.xr.sdk.core/Meshes/HandTracking`) | Meta XR SDK 许可(随 SDK 使用,不单独分发模型文件) | 新画的肤色、指甲贴图和烘焙的法线贴图;幽灵手用半透明材质 |
+| T1 界面设计与图标 | HexR Learning UI – Step Card(Figma) | 本项目自绘 | Figma 文件 fnupP6kEzs5Z5mMhjKOyJL | 项目自有 | 图标导出为 PNG 并转成白色遮罩以便着色 |
 
 ## 待核对
 - 上表的许可证是 Sketchfab 搜索结果里的 "CC Attribution"(版本号按 Sketchfab 默认的 CC BY 4.0 写),**发布前请到各来源页面核对版本和作者署名格式**。

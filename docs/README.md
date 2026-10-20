@@ -17,6 +17,9 @@
 | [07-m0-cleanup.md](07-m0-cleanup.md) | **M0 任务定义**与可删除清单 | 待你确认 |
 | [08-roadmap.md](08-roadmap.md) | **路线图**:里程碑、分工、决策关口、风险 | 草案 v0.1 |
 | [09-m2-demo-plan.md](09-m2-demo-plan.md) | **M2 压力 2AFC Demo**:现有代码评审、玩法规格、脚本清单、预试 | 待你确认 D1–D6 |
+| [10-two-phase-sensory-reeducation.md](10-two-phase-sensory-reeducation.md) | **两阶段方案**:学习(日常任务中的被动触觉体验)+ 判断(辨别训练);中风 + SCI;文献已逐条核对 | 草案 v0.1,待商议 Q1–Q9 |
+| [11-learning-t1-t2.md](11-learning-t1-t2.md) | **学习阶段 T1 牵手 / T2 弹琴 / T5 吃饭 / T11 拧瓶盖**:场景、运行、参数、换 Blender 模型、数据 | 白模可运行,未上真机 |
+| [12-t2-piano-three-levels.md](12-t2-piano-three-levels.md) | **T2 弹琴三个层次**:L1 感受 / L2 学弹(逐级提示)/ L3 测试;校准、按键检测、提示、数据 | 可编译,未上真机 |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | **未决问题清单**(按"向谁确认"分类) | 持续更新 |
 | [FUTURE_WORK.md](FUTURE_WORK.md) | 后续工作:咨询治疗师、文献阅读、自适应分级等 | 持续更新 |
 
