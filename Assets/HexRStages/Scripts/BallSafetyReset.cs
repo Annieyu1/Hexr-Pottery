@@ -21,7 +21,7 @@ namespace HexRMeta.Stages
         [SerializeField] private Transform resetPoint;
 
         [Header("Safety Height")]
-        [Tooltip("Table height - 0.3 m.")]
+        [Tooltip("A little below the table top (table - 0.05 m): a ball that rolls off goes home right away.")]
         [SerializeField] private float minimumY;
 
         [Header("Reset Settings")]

@@ -473,10 +473,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 3159839825100900288, guid: 323cb65d2594c79499a11a99ff0fb347, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 323cb65d2594c79499a11a99ff0fb347, type: 3}
 --- !u!4 &52361271 stripped
 Transform:
@@ -1971,7 +1968,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexRMeta.Stages.BallSafetyReset
   resetPoint: {fileID: 0}
-  minimumY: 0.47069
+  minimumY: 0.72069
   resetCooldown: 1
 --- !u!114 &231411341
 MonoBehaviour:
@@ -4504,7 +4501,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexRMeta.Stages.BallSafetyReset
   resetPoint: {fileID: 0}
-  minimumY: 0.47069
+  minimumY: 0.72069
   resetCooldown: 1
 --- !u!114 &592334844
 MonoBehaviour:
@@ -6792,7 +6789,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexRMeta.Stages.BallSafetyReset
   resetPoint: {fileID: 0}
-  minimumY: 0.47069
+  minimumY: 0.72069
   resetCooldown: 1
 --- !u!114 &816380263
 MonoBehaviour:
@@ -8524,10 +8521,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 3159839825100900288, guid: 323cb65d2594c79499a11a99ff0fb347, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 323cb65d2594c79499a11a99ff0fb347, type: 3}
 --- !u!1 &940045477 stripped
 GameObject:
@@ -12076,7 +12070,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexRMeta.Stages.BallSafetyReset
   resetPoint: {fileID: 0}
-  minimumY: 0.47069
+  minimumY: 0.72069
   resetCooldown: 1
 --- !u!114 &1304017100
 MonoBehaviour:
@@ -12307,7 +12301,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexRMeta.Stages.BallSafetyReset
   resetPoint: {fileID: 0}
-  minimumY: 0.47069
+  minimumY: 0.72069
   resetCooldown: 1
 --- !u!114 &1346196589
 MonoBehaviour:
@@ -14622,7 +14616,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexRMeta.Stages.BallSafetyReset
   resetPoint: {fileID: 0}
-  minimumY: 0.47069
+  minimumY: 0.72069
   resetCooldown: 1
 --- !u!114 &1635531440
 MonoBehaviour:
@@ -16692,10 +16686,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 3159839825100900288, guid: 323cb65d2594c79499a11a99ff0fb347, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 323cb65d2594c79499a11a99ff0fb347, type: 3}
 --- !u!4 &1905018451 stripped
 Transform:

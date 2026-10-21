@@ -23,6 +23,7 @@ namespace HexRMeta.Stages
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private MaterialPropertyBlock block;
+        private Color? spriteDefault;   // a SpriteRenderer panel (Step Card style) is tinted directly
         private StiffnessBall ballInside;
 
         private void OnTriggerEnter(Collider other)
@@ -79,6 +80,13 @@ namespace HexRMeta.Stages
             if (infoPanel == null)
                 return;
 
+            if (infoPanel is SpriteRenderer sprite)
+            {
+                if (spriteDefault.HasValue)
+                    sprite.color = spriteDefault.Value;
+                return;
+            }
+
             infoPanel.SetPropertyBlock(null);
         }
 
@@ -92,6 +100,14 @@ namespace HexRMeta.Stages
         {
             if (infoPanel == null)
                 return;
+
+            if (infoPanel is SpriteRenderer sprite)
+            {
+                if (!spriteDefault.HasValue)
+                    spriteDefault = sprite.color;
+                sprite.color = color;
+                return;
+            }
 
             if (block == null)
                 block = new MaterialPropertyBlock();

@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/HexRStages/Scenes/HexR_Stages_Room.unity
+    guid: a42111954585046b7a0f2301560aa39e
+  - enabled: 1
     path: Assets/HexRStages/Scenes/HexR_Stages.unity
     guid: 094b95c046d324bceb2ff6fdb8178fcc
   - enabled: 0

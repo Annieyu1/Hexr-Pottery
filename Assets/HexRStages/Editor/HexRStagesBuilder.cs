@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using HexRMeta.Learning;
 using Oculus.Interaction;
 using TMPro;
 using UnityEditor;
@@ -22,11 +23,13 @@ namespace HexRMeta.Stages.EditorTools
     /// simple primitives, 3D text and poke buttons around the template's ball and zone positions.
     /// Tweak the LAYOUT constants below and run it again if it feels off.
     /// </summary>
-    public static class HexRStagesBuilder
+    public static partial class HexRStagesBuilder
     {
         // ---------------- paths ----------------
         private const string SourceScene = "Assets/Scenes/Meta.unity";
         private const string TargetScene = "Assets/HexRStages/Scenes/HexR_Stages.unity";
+        private const string RoomSourceScene = "Assets/Scenes/Pressure_Demo_Room.unity";
+        private const string RoomTargetScene = "Assets/HexRStages/Scenes/HexR_Stages_Room.unity";
         private const string MaterialDir = "Assets/HexRStages/Materials";
         private const string ButtonPrefabPath =
             "Packages/com.meta.xr.sdk.interaction/Runtime/Sample/Prefabs/OculusInteractionSamplePokeButton.prefab";
@@ -36,8 +39,9 @@ namespace HexRMeta.Stages.EditorTools
 
         // ---------------- LAYOUT (metres) ----------------
         private const float Stage1Spread = 0.20f;      // soft / hard ball distance from the centre
-        private const float PlatformDiameter = 0.10f;
-        private const float PlatformHeight = 0.02f;
+        private const float BallScale = 1.2f;            // balls and platforms 1.2x the template size (2026-10-22)
+        private const float PlatformDiameter = 0.10f * BallScale;
+        private const float PlatformHeight = 0.02f * BallScale;
         private const float LabelForward = 0.08f;       // Stage 1.2 Weak / Strong labels: towards the user from the ball
         private const float LabelHeight = 0.05f;        // above the table
         private const float ZoneHeight = 0.15f;         // Stage 3 trigger height above the table
@@ -46,12 +50,19 @@ namespace HexRMeta.Stages.EditorTools
         private const float PanelRight = 0.45f;         // flow buttons to the user's right, control buttons to the left
         private const float ButtonHeight = 0.35f;       // above the table
         private const float ButtonSpacing = 0.18f;
-        private const float ResetDrop = 0.3f;           // a ball this far below the table goes home
+        private const float ResetDrop = 0.05f;          // a ball this far below the table top goes home
         private static readonly Vector2 MinTableSize = new Vector2(1.2f, 0.6f);   // fallback table collider
         private const float TableThickness = 0.02f;
         private const float HudDistance = 0.9f;         // info text: this far in front of the rig
         private const float HudEyeHeight = 1.2f;        // seated eye height above the rig origin
         private const float HudBelowEye = 0.15f;
+
+        // Study room (Pressure_Demo_Room): laid out on the HexR_StudyRoom/Desk model, distances along the rig's forward.
+        private const float RoomBallSpacing = 0.13f;
+        private const float RoomBallDepth = 0.30f;
+        private const float RoomBasketDepth = 0.50f;
+        private const float RoomHudDepth = 0.58f;       // in front of the wall (z ≈ 0.68)
+        private const float RoomHudHeight = 0.24f;      // HUD centre above the desk: clears the basket signs, stays under the paintings
 
         // TextMeshPro 3D: font size 1 is roughly 10 cm tall letters.
         private const float TitleFont = 0.5f;
@@ -78,54 +89,87 @@ namespace HexRMeta.Stages.EditorTools
         private static Vector3[] ballSlots;     // left → right
         private static Vector3[] zoneSlots;     // left → right
         private static Vector2 zoneSize;
+        private static Vector3 hudAnchor;       // HUD text centre; HudPosition offsets up / down from it
+        private static Bounds? deskBounds;      // study room: the fallback table collider matches the desk model
         private static GameObject template;
 
         [MenuItem("HexRMeta/Build HexR Stages Scene")]
         public static void Build()
         {
-            if (!File.Exists(SourceScene))
+            BuildWithDialogs(false);
+        }
+
+        /// <summary>Same stages in the study room (copy of Pressure_Demo_Room, the 2AFC demo removed).</summary>
+        [MenuItem("HexRMeta/Build HexR Stages Scene (Study Room)")]
+        public static void BuildRoom()
+        {
+            BuildWithDialogs(true);
+        }
+
+        private static void BuildWithDialogs(bool room)
+        {
+            string source = room ? RoomSourceScene : SourceScene;
+            string target = room ? RoomTargetScene : TargetScene;
+
+            if (!File.Exists(source))
             {
-                EditorUtility.DisplayDialog("HexR stages", "Cannot find " + SourceScene, "OK");
+                EditorUtility.DisplayDialog("HexR stages", "Cannot find " + source, "OK");
                 return;
             }
-            if (File.Exists(TargetScene) &&
+            if (File.Exists(target) &&
                 !EditorUtility.DisplayDialog("HexR stages",
-                    TargetScene + " already exists. Rebuild it from " + SourceScene + "? Any edits in it are lost.",
+                    target + " already exists. Rebuild it from " + source + "? Any edits in it are lost.",
                     "Rebuild", "Cancel"))
                 return;
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
                 return;
 
-            BuildScene();
+            BuildScene(room);
         }
 
         /// <summary>Batch mode entry: -executeMethod HexRMeta.Stages.EditorTools.HexRStagesBuilder.BuildBatch</summary>
         public static void BuildBatch()
         {
-            if (!BuildScene())
+            if (!BuildScene(false))
                 EditorApplication.Exit(1);
         }
 
-        private static bool BuildScene()
+        /// <summary>Batch mode entry: -executeMethod HexRMeta.Stages.EditorTools.HexRStagesBuilder.BuildRoomBatch</summary>
+        public static void BuildRoomBatch()
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(TargetScene));
-            Scene scene = EditorSceneManager.OpenScene(SourceScene, OpenSceneMode.Single);
-            EditorSceneManager.SaveScene(scene, TargetScene, false);   // from here on we edit the copy
+            if (!BuildScene(true))
+                EditorApplication.Exit(1);
+        }
 
-            GameObject ballA = FindAnywhere(scene, "Ball-A");
-            GameObject ballB = FindAnywhere(scene, "Ball-B");
-            GameObject ballC = FindAnywhere(scene, "Ball-C");
-            if (ballA == null || ballB == null || ballC == null)
+        private static bool BuildScene(bool room)
+        {
+            string source = room ? RoomSourceScene : SourceScene;
+            string target = room ? RoomTargetScene : TargetScene;
+
+            if (!LoadUiKit())
+                return false;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(target));
+            Scene scene = EditorSceneManager.OpenScene(source, OpenSceneMode.Single);
+            EditorSceneManager.SaveScene(scene, target, false);   // from here on we edit the copy
+
+            // Grabbable balls already in the scene: Meta.unity's Ball-A/B/C, the study room's 2AFC Object_L/R.
+            string[] ballNames = room ? new[] { "Object_L", "Object_R" } : new[] { "Ball-A", "Ball-B", "Ball-C" };
+            GameObject[] templateBalls = ballNames.Select(n => FindAnywhere(scene, n)).ToArray();
+            if (templateBalls.Any(b => b == null))
             {
-                Debug.LogError("[HexRStagesBuilder] Ball-A / Ball-B / Ball-C not found in " + SourceScene);
+                Debug.LogError("[HexRStagesBuilder] " + string.Join(" / ", ballNames) + " not found in " + source);
                 return false;
             }
 
-            template = ballA;
-            RemoveByTypeName(ballA, "ForceBall");
-            ComputeLayoutFrame(scene, ballA, ballB, ballC);
+            template = templateBalls[0];
+            RemoveByTypeName(template, room ? "PressureObject" : "ForceBall");
+            if (room)
+                ComputeRoomLayout(scene);
+            else
+                ComputeLayoutFrame(scene, templateBalls[0], templateBalls[1], templateBalls[2]);
             RemoveOldStage(scene);
-            EnsureTableCollider(ballA, ballB, ballC);
+            EnsureTableCollider(templateBalls);
 
             var flowGo = new GameObject("FlowController");
             var flow = flowGo.AddComponent<DemoFlowController>();
@@ -140,11 +184,12 @@ namespace HexRMeta.Stages.EditorTools
             SetObject(flow, "stage3Root", stage3);
             SetObject(flow, "stage1Controller", stage1Controller);
             SetObject(flow, "stage2Manager", stage2Manager);
+            SetObject(stage2Manager, "demoFlow", flow);
             stage2.SetActive(false);
             if (stage3 != null) stage3.SetActive(false);
 
             // The template balls are not part of the game any more.
-            foreach (GameObject ball in new[] { ballA, ballB, ballC })
+            foreach (GameObject ball in templateBalls)
             {
                 if (PrefabUtility.IsPartOfPrefabInstance(ball))
                     ball.SetActive(false);
@@ -154,10 +199,10 @@ namespace HexRMeta.Stages.EditorTools
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
-            AddToBuildSettings();
+            AddToBuildSettings(target);
             Selection.activeGameObject = flowGo;
 
-            Debug.Log("[HexRStagesBuilder] Built " + TargetScene + ". Check the layout in the Scene view, then press Play.");
+            Debug.Log("[HexRStagesBuilder] Built " + target + ". Check the layout in the Scene view, then press Play.");
             return true;
         }
 
@@ -165,7 +210,7 @@ namespace HexRMeta.Stages.EditorTools
         // Layout frame
         // ------------------------------------------------------------------
 
-        private static void ComputeLayoutFrame(Scene scene, GameObject a, GameObject b, GameObject c)
+        private static void ComputeRigFrame(Scene scene)
         {
             GameObject rig = FindAnywhere(scene, "OVRCameraRig");
             rigPosition = rig != null ? rig.transform.position : Vector3.zero;
@@ -178,6 +223,13 @@ namespace HexRMeta.Stages.EditorTools
             }
             right = Vector3.Cross(Vector3.up, forward).normalized;
             faceUser = Quaternion.LookRotation(forward, Vector3.up);   // readable from the user's side
+        }
+
+        private static void ComputeLayoutFrame(Scene scene, GameObject a, GameObject b, GameObject c)
+        {
+            ComputeRigFrame(scene);
+            deskBounds = null;
+            hudAnchor = rigPosition + Vector3.up * (HudEyeHeight - HudBelowEye) + forward * HudDistance;
 
             ballSlots = SortLeftToRight(new[] { a.transform.position, b.transform.position, c.transform.position });
             tableCenter = (ballSlots[0] + ballSlots[1] + ballSlots[2]) / 3f;
@@ -217,6 +269,55 @@ namespace HexRMeta.Stages.EditorTools
             zoneSize = Vector2.Min(zoneSize, new Vector2(spacing * 0.85f, spacing * 0.85f));
         }
 
+        /// <summary>
+        /// Study room: the desk top comes from the HexR_StudyRoom/Desk model. Balls in a row across the
+        /// desk centre, baskets behind them, HUD in front of the wall, low enough to miss the painting.
+        /// </summary>
+        private static void ComputeRoomLayout(Scene scene)
+        {
+            ComputeRigFrame(scene);
+
+            Bounds ball = WorldBounds(template, false);   // not the hidden Highlight shell
+            ballRadius = Mathf.Max(0.02f, ball.extents.y) * BallScale;
+            visualOffset = template.transform.InverseTransformPoint(ball.center);
+
+            // The study room's own desk; the template's old RoomEnvironment has another "Desk" under it.
+            GameObject studyRoom = FindAnywhere(scene, "HexR_StudyRoom");
+            Transform deskTransform = studyRoom != null ? studyRoom.transform.Find("Desk") : null;
+            GameObject desk = deskTransform != null ? deskTransform.gameObject : null;
+            Vector3 deskCenter;
+            if (desk != null)
+            {
+                Bounds d = WorldBounds(desk);
+                tableY = d.max.y;
+                deskCenter = d.center;
+                deskBounds = d;
+            }
+            else
+            {
+                Debug.LogWarning("[HexRStagesBuilder] No Desk in the study room; using the 2AFC ball as the table.");
+                tableY = ball.min.y;
+                deskCenter = template.transform.position;
+                deskBounds = null;
+            }
+
+            // Row centre: on the rig's forward line through the desk centre.
+            Vector3 across = rigPosition + right * Vector3.Dot(deskCenter - rigPosition, right);
+            float ballY = tableY + PlatformHeight + ballRadius;   // Stage 1 balls sit on their platforms
+
+            tableCenter = across + forward * RoomBallDepth;
+            tableCenter.y = ballY;
+            ballSlots = new[] { tableCenter - right * RoomBallSpacing, tableCenter, tableCenter + right * RoomBallSpacing };
+
+            zoneSlots = ballSlots.Select(p => p + forward * (RoomBasketDepth - RoomBallDepth)).ToArray();
+            for (int i = 0; i < 3; i++)
+                zoneSlots[i].y = tableY;
+            zoneSize = Vector2.Min(new Vector2(0.16f, 0.12f), Vector2.one * (RoomBallSpacing * 0.85f));
+
+            hudAnchor = across + forward * RoomHudDepth;
+            hudAnchor.y = tableY + RoomHudHeight;
+        }
+
         private static Vector3[] SortLeftToRight(Vector3[] points)
         {
             return points.OrderBy(p => Vector3.Dot(p, right)).ToArray();
@@ -224,7 +325,7 @@ namespace HexRMeta.Stages.EditorTools
 
         private static Vector3 HudPosition(float up)
         {
-            return rigPosition + Vector3.up * (HudEyeHeight - HudBelowEye + up) + forward * HudDistance;
+            return hudAnchor + Vector3.up * up;
         }
 
         private static Vector3 ButtonPosition()
@@ -261,6 +362,18 @@ namespace HexRMeta.Stages.EditorTools
             if (missing == 0)
             {
                 Debug.Log("[HexRStagesBuilder] The room's table colliders cover every ball and basket position.");
+                return;
+            }
+
+            if (deskBounds.HasValue)
+            {
+                // Exactly the desk top, so a ball rolling off the edge really falls.
+                Bounds d = deskBounds.Value;
+                var slab = new GameObject("TableCollider");
+                slab.transform.position = new Vector3(d.center.x, tableY - TableThickness * 0.5f, d.center.z);
+                slab.AddComponent<BoxCollider>().size = new Vector3(d.size.x, TableThickness, d.size.z);
+                Debug.Log($"[HexRStagesBuilder] Desk had no collider at y={tableY:0.000}; added an invisible TableCollider " +
+                          $"{d.size.x:0.00} x {d.size.z:0.00} m matching the desk.");
                 return;
             }
 
@@ -304,12 +417,19 @@ namespace HexRMeta.Stages.EditorTools
         // Clean-up of the old force-sorting setup
         // ------------------------------------------------------------------
 
+        // Meta.unity's force-sorting setup and the study room's 2AFC demo (its balls are removed after cloning).
+        private static readonly HashSet<string> OldStageRoots = new HashSet<string>
+        {
+            "StageController", "Zone", "Canvas", "TorchInfoFrame",
+            "GameController", "Pedestal_L", "Pedestal_R", "StrongerZone", "HintRoot", "HintText",
+            "ControlPanel", "FeedbackPresenter"
+        };
+
         private static void RemoveOldStage(Scene scene)
         {
             foreach (GameObject root in scene.GetRootGameObjects())
             {
-                if (root.name == "StageController" || root.name == "Zone" ||
-                    root.name == "Canvas" || root.name == "TorchInfoFrame")
+                if (OldStageRoots.Contains(root.name))
                     Object.DestroyImmediate(root);
             }
 
@@ -349,30 +469,23 @@ namespace HexRMeta.Stages.EditorTools
             MakePlatform("HardPlatform", hardSet.transform, hardPos);
 
             // Labels stand between each ball and the user; Stage1Controller pops them up (scale 0 → 1).
-            GameObject softInfo = MakeText("SoftInfo", root.transform, LabelPosition(softPos),
-                "Weak", LabelFont, new Color(0.6f, 0.85f, 1f), 0.2f).gameObject;
-            GameObject hardInfo = MakeText("HardInfo", root.transform, LabelPosition(hardPos),
-                "Strong", LabelFont, new Color(1f, 0.65f, 0.45f), 0.2f).gameObject;
+            // Weak = light green tint, Strong = solid green: same family, still easy to tell apart.
+            GameObject softInfo = MakePill("SoftInfo", root.transform, LabelPosition(softPos), "Weak", 120f, 44f, 22f,
+                                           AccentTint, AccentText, Accent);
+            GameObject hardInfo = MakePill("HardInfo", root.transform, LabelPosition(hardPos), "Strong", 120f, 44f, 22f,
+                                           Accent, Color.white);
 
-            TextMeshPro instruction = MakeText("InstructionText", root.transform, HudPosition(0.12f),
-                "Squeeze the object gently", PromptFont, Color.white, 1.0f);
-
-            GameObject resultPanel = MakeGroup("ResultPanel", root.transform);
-            TextMeshPro resultTitle = MakeText("ResultTitle", resultPanel.transform, HudPosition(0.0f),
-                "WEAK", TitleFont, new Color(1f, 0.92f, 0.3f), 0.8f);
-            TextMeshPro resultValue = MakeText("ResultValue", resultPanel.transform, HudPosition(-0.10f),
-                "10", TitleFont, Color.white, 0.8f);
+            // One step card for the instruction and the WEAK / HARD result.
+            StepCard card = MakeStepCard("StepCard", root.transform, HudPosition(0f), 460f, 5);
 
             controller = controllerGo.AddComponent<Stage1Controller>();
 
             GameObject menu = MakeGroup("Stage12Menu", root.transform);
-            PlaceButton(menu.transform, ButtonPosition(), "Next", controller.OnNextPressed);
+            StyledButton(menu.transform, FrontButtonPosition(), "Next", 120f, Accent, null, Color.white, startIcon,
+                         controller.OnNextPressed);
 
             SetObject(controller, "demoFlow", flow);
-            SetObject(controller, "instructionText", instruction);
-            SetObject(controller, "resultCanvas", resultPanel);
-            SetObject(controller, "resultTitle", resultTitle);
-            SetObject(controller, "resultValue", resultValue);
+            SetObject(controller, "card", card);
             SetObject(controller, "centerBall", centerBall.GetComponent<GrabNotifier>());
             SetObject(controller, "softBall", softBall.GetComponent<GrabNotifier>());
             SetObject(controller, "hardBall", hardBall.GetComponent<GrabNotifier>());
@@ -390,7 +503,6 @@ namespace HexRMeta.Stages.EditorTools
             hardSet.SetActive(false);
             softInfo.SetActive(false);
             hardInfo.SetActive(false);
-            resultPanel.SetActive(false);
             menu.SetActive(false);
             return root;
         }
@@ -414,12 +526,12 @@ namespace HexRMeta.Stages.EditorTools
                 GameObject go = CloneGrabbable(ballNames[i], ballsRoot.transform, ballSlots[i], null);
                 var ball = go.AddComponent<StiffnessBall>();
 
-                TextMeshPro label = MakeText("AnswerLabel", go.transform, ballSlots[i] + Vector3.up * (ballRadius + 0.06f),
-                    "", LabelFont, new Color(1f, 0.92f, 0.3f), 0.3f);
-                label.gameObject.SetActive(false);
+                GameObject label = MakePill("AnswerLabel", go.transform, ballSlots[i] + Vector3.up * (ballRadius + 0.05f),
+                                            "", 150f, 40f, 20f, Color.white, AccentText, Accent);
+                label.SetActive(false);
 
-                SetObject(ball, "answerLabelRoot", label.gameObject);
-                SetObject(ball, "answerLabelText", label);
+                SetObject(ball, "answerLabelRoot", label);
+                SetObject(ball, "answerLabelText", label.GetComponentInChildren<TMP_Text>(true));
                 balls[i] = ball;
             }
 
@@ -429,24 +541,13 @@ namespace HexRMeta.Stages.EditorTools
             for (int i = 0; i < 3; i++)
                 baskets[i] = BuildBasket(basketsRoot.transform, basketNames[i], i, zoneSlots[i], manager);
 
-            TextMeshPro instruction = MakeText("InstructionText", root.transform, HudPosition(0.12f),
-                "Feel each ball and put it in the matching basket", PromptFont, Color.white, 1.0f);
-            TextMeshPro progress = MakeText("ProgressText", root.transform, HudPosition(0.0f),
-                "PLACED 0 / 3", PromptFont, Color.white, 1.0f);
-            TextMeshPro score = MakeText("ScoreText", root.transform, HudPosition(0.0f),
-                "", PromptFont, Color.white, 1.0f);
-            score.gameObject.SetActive(false);
-
-            GameObject buttons = MakeGroup("ResultButtons", root.transform);
-            PlaceButton(buttons.transform, ButtonPosition(), "One more try", manager.OnOneMoreTryPressed);
-            buttons.SetActive(false);
+            // One step card: instruction, "Placed x / 3" (chip + 3 bar segments) and the result.
+            StepCard card = MakeStepCard("StepCard", root.transform, HudPosition(0f), 420f, 3);
 
             SetArray(manager, "balls", balls);
             SetArray(manager, "baskets", baskets);
-            SetObject(manager, "instructionText", instruction);
-            SetObject(manager, "progressText", progress);
-            SetObject(manager, "scoreText", score);
-            SetObject(manager, "resultButtons", buttons);
+            SetObject(manager, "card", card);
+            BuildStage2Buttons(root.transform, manager, FrontButtonPosition());
             return root;
         }
 
@@ -469,17 +570,21 @@ namespace HexRMeta.Stages.EditorTools
             MakeBlock("WallLeft", root.transform, new Vector3(-w * 0.5f, WallHeight * 0.5f, 0f), new Vector3(WallThickness, WallHeight, d), mat, true);
             MakeBlock("WallRight", root.transform, new Vector3(w * 0.5f, WallHeight * 0.5f, 0f), new Vector3(WallThickness, WallHeight, d), mat, true);
 
-            // Info panel behind the basket: label on it, turns green / red on the result.
-            GameObject panel = MakeBlock("InfoPanel", root.transform,
-                new Vector3(0f, WallHeight + 0.06f, d * 0.5f + 0.01f), new Vector3(w, 0.08f, 0.004f),
-                GetMaterial("InfoPanel", new Color(0.25f, 0.3f, 0.4f), false));
-            MakeText("Label", root.transform, root.transform.TransformPoint(new Vector3(0f, WallHeight + 0.06f, d * 0.5f + 0.004f)),
-                label, LabelFont, Color.white, w);
+            // Sign behind the basket (step-card panel style): turns green / red on the result.
+            float signW = Mathf.Min(w, 200f * P), signH = 64f * P;
+            var sign = new GameObject("Sign").transform;
+            sign.SetParent(root.transform, false);
+            sign.localPosition = new Vector3(0f, WallHeight + signH * 0.5f + 0.01f, d * 0.5f + 0.01f);
+            SpriteRenderer panel = Panel("InfoPanel", sign, Layer(0), signW, signH, 16f * P, StepCard.Panel, 0);
+            Panel("Outline", sign, Layer(1), signW, signH, 16f * P, StepCard.Line, 1, true);
+            Label("Label", sign, Layer(2), label, 24f, true, StepCard.Title, signW / P, TextAlignmentOptions.Center, 3);
 
             var basket = root.AddComponent<BasketTrigger>();
             SetEnum(basket, "basketCategory", category);
             SetObject(basket, "trialManager", manager);
-            SetObject(basket, "infoPanel", panel.GetComponent<Renderer>());
+            SetObject(basket, "infoPanel", panel);
+            SetColor(basket, "correctColor", StepCard.Green);
+            SetColor(basket, "wrongColor", StepCard.Red);
             return basket;
         }
 
@@ -495,21 +600,26 @@ namespace HexRMeta.Stages.EditorTools
 
             // Pause and Start share one slot: only one of them shows at a time.
             Vector3 top = ControlPosition();
-            GameObject pause = PlaceButton(root.transform, top, "Pause", panel.OnPausePressed);
-            GameObject start = PlaceButton(root.transform, top, "Start", panel.OnStartPressed);
-            GameObject menu = PlaceButton(root.transform, top - Vector3.up * ButtonSpacing, "Menu", panel.OnMenuPressed);
+            // Figma control pills: Pause = white with green ring, Start = solid green, Menu = grey.
+            GameObject pause = StyledButton(root.transform, top, "Pause", 120f, Color.white, Accent, StepCard.Title, pauseIcon,
+                                            panel.OnPausePressed);
+            GameObject start = StyledButton(root.transform, top, "Start", 120f, Accent, null, Color.white, startIcon,
+                                            panel.OnStartPressed);
+            GameObject menu = StyledButton(root.transform, top - Vector3.up * (44f * ButtonScale * P + 0.03f), "Menu", 120f,
+                                           ButtonGrey, null, StepCard.Title, null, panel.OnMenuPressed);
 
-            TextMeshPro paused = MakeText("PausedText", root.transform, HudPosition(0.25f),
-                "Paused", TitleFont, new Color(1f, 0.92f, 0.3f), 0.8f);
+            // Yellow "hint" pill above the step card.
+            GameObject paused = MakePill("PausedText", root.transform, HudPosition(120f * P + 0.015f), "Paused", 160f, 48f, 24f,
+                                         StepCard.YellowTint, StepCard.YellowText, StepCard.Yellow);
 
             SetObject(panel, "demoFlow", flow);
             SetObject(panel, "pauseButton", pause);
             SetObject(panel, "startButton", start);
             SetObject(panel, "menuButton", menu);
-            SetObject(panel, "pausedText", paused.gameObject);
+            SetObject(panel, "pausedText", paused);
 
             if (start != null) start.SetActive(false);
-            paused.gameObject.SetActive(false);
+            paused.SetActive(false);
         }
 
         // ------------------------------------------------------------------
@@ -626,6 +736,7 @@ namespace HexRMeta.Stages.EditorTools
             GameObject go = Object.Instantiate(template, parent);
             go.name = name;
             go.transform.SetPositionAndRotation(position, template.transform.rotation);
+            go.transform.localScale = template.transform.localScale * BallScale;
             go.SetActive(true);
 
             if (look != null)
@@ -672,6 +783,7 @@ namespace HexRMeta.Stages.EditorTools
             go.AddComponent<HapticStrength>();
             var reset = go.AddComponent<BallSafetyReset>();
             SetFloat(reset, "minimumY", tableY - ResetDrop);
+            AddGrabHint(go);
             return go;
         }
 
@@ -796,16 +908,16 @@ namespace HexRMeta.Stages.EditorTools
         // Helpers
         // ------------------------------------------------------------------
 
-        private static void AddToBuildSettings()
+        private static void AddToBuildSettings(string target)
         {
-            var scenes = EditorBuildSettings.scenes.Where(s => s.path != TargetScene).ToList();
-            scenes.Insert(0, new EditorBuildSettingsScene(TargetScene, true));
+            var scenes = EditorBuildSettings.scenes.Where(s => s.path != target).ToList();
+            scenes.Insert(0, new EditorBuildSettingsScene(target, true));
             EditorBuildSettings.scenes = scenes.ToArray();
         }
 
-        private static Bounds WorldBounds(GameObject go)
+        private static Bounds WorldBounds(GameObject go, bool includeInactive = true)
         {
-            Renderer[] renderers = go.GetComponentsInChildren<Renderer>(true);
+            Renderer[] renderers = go.GetComponentsInChildren<Renderer>(includeInactive);
             if (renderers.Length == 0)
                 return new Bounds(go.transform.position, Vector3.one * 0.07f);
 

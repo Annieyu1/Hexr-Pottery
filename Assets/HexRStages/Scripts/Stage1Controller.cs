@@ -1,4 +1,5 @@
 using System.Collections;
+using HexRMeta.Learning;
 using Oculus.Interaction;
 using TMPro;
 using UnityEngine;
@@ -36,7 +37,11 @@ namespace HexRMeta.Stages
         [Header("Flow")]
         [SerializeField] private DemoFlowController demoFlow;
 
-        [Header("Instruction UI")]
+        [Header("Step Card UI")]
+        [Tooltip("Figma Step Card (green). When set, the instruction and result texts below are not used.")]
+        [SerializeField] private StepCard card;
+
+        [Header("Instruction UI (no card)")]
         [SerializeField] private TMP_Text instructionText;
 
         [Header("Result UI")]
@@ -165,9 +170,12 @@ namespace HexRMeta.Stages
 
             currentState = Stage1State.SoftReady;
             UpdateHapticStrength();
+            Hint(centerBall, true);
+            Hint(softBall, false);
+            Hint(hardBall, false);
 
             HideResult();
-            ShowInstruction("Squeeze the object gently");
+            ShowStep(1, "Squeeze the object gently", "Grab the ball, then let go");
 
             Debug.Log("[Stage1] SOFT READY");
         }
@@ -190,15 +198,17 @@ namespace HexRMeta.Stages
         private IEnumerator SoftSqueezed()
         {
             currentState = Stage1State.SoftResult;
-            ShowResult("WEAK", softStrength.ToString("0"));
+            Hint(centerBall, false);
+            ShowResult(1, "WEAK", softStrength.ToString("0"));
             Debug.Log("[Stage1] SOFT RESULT");
 
             yield return StagePause.Wait(resultDisplayTime);
 
             currentState = Stage1State.HardReady;
             UpdateHapticStrength();
+            Hint(centerBall, true);
             HideResult();
-            ShowInstruction("Squeeze the object again");
+            ShowStep(2, "Squeeze the object again", "Grab it and let go once more");
 
             Debug.Log("[Stage1] HARD READY");
         }
@@ -206,14 +216,15 @@ namespace HexRMeta.Stages
         private IEnumerator HardSqueezed()
         {
             currentState = Stage1State.HardResult;
-            ShowResult("HARD", hardStrength.ToString("0"));
+            Hint(centerBall, false);
+            ShowResult(2, "HARD", hardStrength.ToString("0"));
             Debug.Log("[Stage1] HARD RESULT");
 
             yield return StagePause.Wait(resultDisplayTime);
 
             currentState = Stage1State.DifferencePrompt;
             HideResult();
-            ShowInstruction("Can you feel the difference?");
+            ShowStep(3, "Can you feel the difference?", "");
             Debug.Log("[Stage1] DIFFERENCE PROMPT");
 
             yield return StagePause.Wait(differencePromptTime);
@@ -242,7 +253,7 @@ namespace HexRMeta.Stages
             if (softReset != null) softReset.SetHeld(true);
             if (hardReset != null) hardReset.SetHeld(true);
 
-            ShowInstruction("Feel the difference between the two balls");
+            ShowStep(4, "Feel the difference between the two balls", "Squeeze each ball once");
 
             Vector3 startPosition = centerPoint.position;
             float elapsed = 0f;
@@ -269,6 +280,8 @@ namespace HexRMeta.Stages
 
             currentState = Stage1State.ComparisonReady;
             UpdateHapticStrength();
+            Hint(softBall, true);
+            Hint(hardBall, true);
 
             Debug.Log("[Stage1] Stage 1.2 Comparison Ready");
         }
@@ -287,6 +300,7 @@ namespace HexRMeta.Stages
 
             if (soft) softExperienced = true;
             else hardExperienced = true;
+            Hint(soft ? softBall : hardBall, false);
             Debug.Log("[Stage1.2] " + (soft ? "SOFT" : "HARD") + " EXPERIENCED");
 
             if (softExperienced && hardExperienced)
@@ -297,6 +311,7 @@ namespace HexRMeta.Stages
         private IEnumerator ShowLabels()
         {
             currentState = Stage1State.LabelsShown;
+            ShowStep(5, "Weak and Strong", "Keep squeezing to compare");
             Debug.Log("[Stage1.2] BOTH BALLS EXPERIENCED, labels up");
 
             if (softInfo != null) { softInfo.transform.localScale = Vector3.zero; softInfo.SetActive(true); }
@@ -321,6 +336,7 @@ namespace HexRMeta.Stages
             yield return StagePause.Wait(nextDelay);
 
             currentState = Stage1State.Completed;
+            ShowStep(5, "Well done!", "Press Next when you are ready", CardTone.Done);
             if (stage12Menu != null)
                 stage12Menu.SetActive(true);
 
@@ -384,6 +400,14 @@ namespace HexRMeta.Stages
         // HELPERS
         // ========================================================
 
+        /// <summary>The pulsing "grab me" cue under a ball (GrabHint), if it has one.</summary>
+        private static void Hint(GrabNotifier ball, bool on)
+        {
+            var hint = ball != null ? ball.GetComponent<GrabHint>() : null;
+            if (hint != null)
+                hint.SetHint(on);
+        }
+
         private static void ResetBall(GrabNotifier ball)
         {
             var reset = ball != null ? ball.GetComponent<BallSafetyReset>() : null;
@@ -409,6 +433,18 @@ namespace HexRMeta.Stages
                 label.SetActive(false);
         }
 
+        /// <summary>Step card: chip "Step n / 5", title, hint, n bar segments. Without a card: the title as instruction text.</summary>
+        private void ShowStep(int step, string title, string hint, CardTone tone = CardTone.Normal)
+        {
+            if (card != null)
+            {
+                card.Show("Step " + step + " / 5", title, hint, step, tone);
+                Debug.Log("[Stage1 UI] " + title);
+            }
+            else
+                ShowInstruction(title);
+        }
+
         private void ShowInstruction(string message)
         {
             if (instructionText == null)
@@ -422,8 +458,14 @@ namespace HexRMeta.Stages
             Debug.Log("[Stage1 UI] " + message);
         }
 
-        private void ShowResult(string title, string value)
+        private void ShowResult(int step, string title, string value)
         {
+            if (card != null)
+            {
+                card.Show("Step " + step + " / 5", title, "Strength " + value, step, CardTone.Correct);
+                return;
+            }
+
             if (resultCanvas == null || resultTitle == null || resultValue == null)
             {
                 Debug.LogError("[Stage1] Result UI reference missing!");

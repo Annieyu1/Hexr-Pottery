@@ -27,6 +27,10 @@ namespace HexRMeta.Stages
         {
             ShowOnly(stage2Root);
             Debug.Log("[DemoFlow] Stage 2");
+
+            // The sorting game (and its timer) starts when Stage 2 is entered.
+            if (stage2Manager != null)
+                stage2Manager.BeginGame();
         }
 
         public void GoToStage3()

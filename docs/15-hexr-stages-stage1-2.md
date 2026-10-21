@@ -89,7 +89,7 @@ Stage 1 和 Stage 2 连在同一个场景里。界面文字沿用 PICO 版的英
 - 球:`Rigidbody` 质量 0.01、**useGravity = true**、isKinematic = false、Interpolate、碰撞检测 ContinuousDynamic。
 - 抓在手里时不受重力(Meta `Grabbable._kinematicWhileSelected = true`,模板已是 true);松手后按手速抛出、自然下落(`_throwWhenUnselected = true`,模板已是 true)。
 - 球能落在桌上、平台上、篮子里:**桌面、平台、篮子底和四壁都要有实体碰撞体**(第一版代码里平台和篮子的碰撞体被删掉了,要加回来);篮子里另有一个 trigger 用来判定。
-- **安全复位**:球心低于 **桌面高度 − 0.3 m** 就回到**这个球自己的原位**(PICO 各球的阈值不统一,统一成这个)。被抓着时不复位。复位流程:`LockKinematic` → 速度清零 → 设位姿 → 等一个物理帧 → `UnlockKinematic` → 1 秒冷却。
+- **安全复位**:球心低于 **桌面高度 − 0.05 m**(比桌面稍低,2026-10-22 用户要求)就回到**这个球自己的原位**(PICO 各球的阈值不统一,统一成这个)。被抓着时不复位。复位流程:`LockKinematic` → 速度清零 → 设位姿 → 等一个物理帧 → `UnlockKinematic` → 1 秒冷却。
 
 **常驻按钮(Stage 1 和 Stage 2 都显示)**
 
@@ -176,7 +176,7 @@ public class StagePause : MonoBehaviour
 
 ### 3.7 `HexRStagesBuilder` 改动
 
-- `CloneGrabbable`:设置 `Rigidbody`:`mass=0.01, useGravity=true, isKinematic=false, interpolation=Interpolate, collisionDetectionMode=ContinuousDynamic`;确认 `Grabbable` 的 `_kinematicWhileSelected`、`_throwWhenUnselected` 为 true(SerializedObject 设置);`BallSafetyReset.minimumY = tableY - 0.3`。
+- `CloneGrabbable`:设置 `Rigidbody`:`mass=0.01, useGravity=true, isKinematic=false, interpolation=Interpolate, collisionDetectionMode=ContinuousDynamic`;确认 `Grabbable` 的 `_kinematicWhileSelected`、`_throwWhenUnselected` 为 true(SerializedObject 设置);`BallSafetyReset.minimumY = tableY - 0.05`。
 - **桌面碰撞**:检查模板 `Game/RoomEnvironment` 里桌子是否有碰撞体(模板里有 9 个 BoxCollider、2 个 MeshCollider,未逐个核实)。在 `tableCenter` 正下方做 `Physics.Raycast`,打不到桌面就在 `tableY` 加一块不可见的 `BoxCollider` 桌面(大小覆盖球位和篮子区域,约 1.2 × 0.6 m,厚 0.02 m)。
 - **平台**:`MakePlatform` 保留碰撞体(现在是删掉的)。平台顶面 = 球底。
 - **篮子**:四壁和底保留 `BoxCollider`(实体);另加内部 trigger(现有 `AddZoneTrigger`,高度改成和壁同高 0.05 m 左右,避免球在篮子上方经过就被算放入)。壁高可提到 0.06 m 防弹出。
@@ -215,7 +215,7 @@ public class StagePause : MonoBehaviour
 - [ ] Next → Stage 2:三个球外观一致;多玩几轮,日志里力度分配会变化。
 - [ ] 球扔/放进篮子会落进去,"PLACED x / 3" 正确;拿出来计数减一;一个篮子放第二个球不计。
 - [ ] 三个都放好后显示 n / 3 CORRECT、篮子变色、球上显示答案;One more try 后全部复原并重新随机。
-- [ ] 球掉到桌下(低于桌面 0.3 m)回到自己的原位;抓着时不会被复位。
+- [ ] 球掉下桌(低于桌面 0.05 m)回到自己的原位;抓着时不会被复位。
 - [ ] Pause:倒计时/动画停住,球冻结、抓不起来、手套不出力;**暂停不会被算成捏了一次**;Start 继续。
 - [ ] Menu:任何时候(包括暂停中、Stage 2 结算后)都回到 Stage 1.1 第 1 步,所有球归位。
 - [ ] Console 无报错;Quest 上 72 Hz 稳定。
@@ -271,6 +271,31 @@ PICO 场景里实际的连线(供对照):
 - [x] 1.2:只捏一个球不出标牌;两个都捏过 → 标牌 0.3 秒弹出 → 2 秒后 Next → Stage 2。
 - [x] Stage 2:球掉进篮子并留在里面,PLACED 计数、n / 3 CORRECT、篮子红 / 绿、答案都正确;One more try 后归位并重新随机。
 - [x] Stage 2 暂停中按 Menu → 取消暂停,回到 1.1 第 1 步。分球进行到一半按 Menu → 锁已归还、抓取恢复、球归位。
-- [x] 球掉到桌下 0.5 m → 回到原位。
+- [x] 球掉到桌下 → 回到原位。
 - [ ] 真手抓取 / 抛球 / 暂停时手里有球(需 Meta XR Simulator 或 Link)
 - [ ] 手套力度、Quest 实机帧率
+
+## 8. 书房版本(2026-10-22)
+
+菜单 **HexRMeta > Build HexR Stages Scene (Study Room)**:从 `Assets/Scenes/Pressure_Demo_Room.unity` 复制出 `Assets/HexRStages/Scenes/HexR_Stages_Room.unity`(原书房场景不改),保留书房模型、烘焙灯光、rig 和手套;删掉 2AFC demo(GameController、Object_L/R、Pedestal_L/R、StrongerZone、HintRoot/HintText、ControlPanel、FeedbackPresenter),用 Object_L 克隆所有球。生成器把这个场景放在 Build Settings 第一位。
+
+布局按书房桌子 `HexR_StudyRoom/Desk`(0.96 × 0.48 m,桌面 y 0.777)量:
+
+- 球一排在桌子中线上,间距 0.13 m,离 rig 0.30 m;篮子在 0.50 m(墙在 0.68 m,台灯在左后角,书和笔筒在右侧,都不挡)。
+- HUD 文字在桌子正上方、墙前 0.58 m,中心高出桌面 0.24 m:高于篮子标牌,低于墙上的画。
+- 桌子模型在桌面高度没有碰撞体(射线直接打到下面的旧 `DeskShadow`),生成器加了一块和桌子一样大的不可见 `TableCollider`,所以球滚出桌边会真的掉下去。
+- 球的复位高度 = 桌面 − 0.05 m(0.727)。
+
+编辑器 Play 冒烟测试:1.1 → 1.2 → 标牌 → Next → Stage 2 → 结算(3/3、1/3 两种)→ 暂停 + Menu 都正常;把球推出桌子前沿会触发复位("fell below 0.73")。旧场景 `HexR_Stages.unity` 没有重建,只把 6 个球的 `minimumY` 从 0.471 改成 0.721。
+
+## 9. 分类游戏细化 + Step Card UI(2026-10-22)
+
+- **UI**:Figma "HexR Learning UI – Step Card" 风格(复用 Learning 的 `StepCard`、圆角贴图、Inter 字体、图标),主色改成绿色 `#10B981`。书房场景里用户手动调整过的位置(Stage 1 卡片前移、1.5 倍;Weak/Strong 标牌 1.5 倍;Next、Pause、Menu、Start 的位置)保持不动。之后改书房场景用菜单 **HexRMeta > Update Open HexR Stages Scene (keep edits)**,不要再用 Build 重建。
+- **Stage 2 = 分类游戏**:一轮 = 三个球放进三个篮子;一个 task = 3 轮。每轮结束显示该轮对几个、篮子标牌红 / 绿、答案标签贴在篮子正面,2.5 秒后下一轮。
+  - Task 1:每轮 10 / 35 / 60(位置随机)。结束显示到目前为止的正确率、球数、用时 → **Try one more time** → **Easier**(再来 10 / 35 / 60)或 **Harder**(每轮从 15 / 30 / 45 / 60 随机取 3 个,最软 = Weak,最硬 = Strong)。
+  - Task 2 结束:显示 6 轮的总正确率和用时 → **Replay**(从 Task 1 重新开始,计时清零)或 **Back**(回到 Stage 1 最开头)。
+  - 计时从进入 Stage 2 开始;暂停和结果画面不计时。
+  - 按钮在 Step Card 前面(和手动放好的 Next 同一位置)。
+- **球和球垫 1.2 倍**(球垫底贴桌面,球放在上面)。
+- **抓取引导**:要抓的球下面有绿色柔光 + 向外扩散的圆环(`GrabHint`);Stage 1 跟着步骤走,Stage 2 对还没放进篮子的球显示;抓着或暂停时隐藏。
+- 编辑器 Play 测试(反射模拟放球):Task 1 7/9 = 78%、用时显示;Harder 三轮力度都来自 15/30/45/60;6 轮总计 16/18 = 89%;Replay 清零、Back 回到 1.1。旧的 `HexR_Stages.unity`(Meta 模板版)没有更新,需要的话重建。
