@@ -18,6 +18,43 @@ namespace HexRMeta.Learning.EditorTools
         private const string PrefabDir = "Assets/Learning/Prefabs";
         private const string StartPanelPath = PrefabDir + "/T1StartPanel.prefab";
 
+        private const string T1BgmPath = "Assets/Learning/Audio/T1_BGM_Cuties.mp3";
+
+        /// <summary>Adds (or reuses) a "BGM" child under the task's root with TaskBgm playing the clip.</summary>
+        public static TaskBgm AddTaskBgm(LearningTask task, string clipPath)
+        {
+            Transform root = task.transform.parent;
+            Transform existing = root.Find("BGM");
+            GameObject go = existing != null ? existing.gameObject : new GameObject("BGM");
+            if (existing == null)
+            {
+                go.transform.SetParent(root, false);
+                Undo.RegisterCreatedObjectUndo(go, "Add BGM");
+            }
+            var src = go.GetComponent<AudioSource>();   // Unity objects: no ?? (fake null)
+            if (src == null) src = go.AddComponent<AudioSource>();
+            src.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(clipPath);
+            src.playOnAwake = false;
+            src.loop = false;
+            src.spatialBlend = 0f;
+            src.priority = 200;   // below the feedback tones
+            var bgm = go.GetComponent<TaskBgm>();
+            if (bgm == null) bgm = go.AddComponent<TaskBgm>();
+            Set(bgm, "task", task);
+            if (task is HandHoldTask) Set(task, "bgm", bgm);
+            if (src.clip == null) Debug.LogWarning("[LearningSceneBuilder] BGM clip not found: " + clipPath);
+            return bgm;
+        }
+
+        [MenuItem("HexRMeta/Learning/T1 Add BGM To Open Scene")]
+        public static void AddT1BgmToOpenScene()
+        {
+            var task = Object.FindAnyObjectByType<HandHoldTask>(FindObjectsInactive.Include);
+            if (task == null) { Debug.LogWarning("[LearningSceneBuilder] No HandHoldTask in the open scene."); return; }
+            AddTaskBgm(task, T1BgmPath);
+            EditorSceneManager.MarkSceneDirty(task.gameObject.scene);
+        }
+
         [MenuItem("HexRMeta/Learning/T1 Start Panel/Build Prefab")]
         public static void BuildT1StartPanelPrefab()
         {

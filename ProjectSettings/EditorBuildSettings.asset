@@ -17,6 +17,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Learning/Scenes/T1_HandHold.unity
     guid: 3bfb08897e18e4458929359ef92ad4b6
+  - enabled: 1
+    path: Assets/Learning/Scenes/Hub_Menu.unity
+    guid: 155942a1c36234ef9bd95ce9e7f26b33
+  - enabled: 1
+    path: Assets/Learning/Scenes/T2_Piano.unity
+    guid: ce77fab035fbc433ba7d4d29be4b03a4
+  - enabled: 1
+    path: Assets/Learning/Scenes/T5_Eating.unity
+    guid: 0e119fc06406642ff9537d5ef54ddb07
+  - enabled: 1
+    path: Assets/Learning/Scenes/T11_OpenBottle.unity
+    guid: 7a73baff0f49241038fd486c6e40c140
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 7ad12a68e96817a4fb4fe4267015b83a, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: fa42c867ad27fbd448afb69a299f5913, type: 2}

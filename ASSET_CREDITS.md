@@ -13,8 +13,10 @@ Only assets that ship in the game are listed here. Licences: CC0 / CC-BY only, n
 | T1 界面字体 | Inter (Regular、Bold,18pt 静态字重) | Rasmus Andersson / The Inter Project Authors | https://fonts.google.com/specimen/Inter | SIL Open Font License 1.1(全文:`Assets/Learning/Art/Fonts/Inter-OFL.txt`) | 未修改字体文件;在 Unity 里生成 TextMeshPro 动态字体资源 |
 | T1 模型手 / 幽灵手 | OpenXRRightHand.fbx | Meta | Meta XR Core SDK(`com.meta.xr.sdk.core/Meshes/HandTracking`) | Meta XR SDK 许可(随 SDK 使用,不单独分发模型文件) | 新画的肤色、指甲贴图和烘焙的法线贴图;幽灵手用半透明材质 |
 | T1 界面设计与图标 | HexR Learning UI – Step Card(Figma) | 本项目自绘 | Figma 文件 fnupP6kEzs5Z5mMhjKOyJL | 项目自有 | 图标导出为 PNG 并转成白色遮罩以便着色 |
+| T1 背景音乐 | Cuties(文件 `octosound-cuties-172664.mp3`,项目内 `Assets/Learning/Audio/T1_BGM_Cuties.mp3`) | Octosound | Pixabay Music(按文件名判断;曲目页未核实) | Pixabay Content License(待核) | 未修改音频;Unity 里压成 Vorbis 流式播放,循环处做淡入淡出 |
 
 ## 待核对
+- **T1 背景音乐**:由用户从 Pixabay 下载(2026-10-21)。Pixabay Content License 不属于本表默认的 CC0 / CC-BY,发布前请到 Pixabay 上该曲目页面确认作者、许可和是否允许在应用中分发。
 - 上表的许可证是 Sketchfab 搜索结果里的 "CC Attribution"(版本号按 Sketchfab 默认的 CC BY 4.0 写),**发布前请到各来源页面核对版本和作者署名格式**。
 - 书柜、台灯、绿植的颜色/贴图在阶段 C 会重做;若最终换掉某件资源,请同步删除对应行。
 - `isometric model`(рум1.fbx)与 `study-room model`(Study Room.fbx)目前只作参考,未进入游戏;若之后取用其中的件,需补登记作者、来源和许可证。

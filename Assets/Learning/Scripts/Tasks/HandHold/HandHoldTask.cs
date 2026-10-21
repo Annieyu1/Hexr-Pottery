@@ -124,6 +124,8 @@ namespace HexRMeta.Learning
         [SerializeField] private GameObject finishChoice;
         [Tooltip("Correct / wrong sounds (key 0..4 = C..G).")]
         [SerializeField] private ToneSynth synth;
+        [Tooltip("Background music; it is turned down while squeezes are counted and answered.")]
+        [SerializeField] private TaskBgm bgm;
 
         private const string ChipName = "Hand hold";
         private const string RegripHint = "Hold the hand again to continue";
@@ -192,6 +194,7 @@ namespace HexRMeta.Learning
             if (returning != null) { StopCoroutine(returning); returning = null; }
             if (guide != null) guide.Show(false);
             quietRelease = answerOpen = choiceOpen = feelAgain = skipRequested = false;
+            squeezing = countingPreview = false;
             currentHold = null;
             unheldFor = 0f;
             if (partnerHand != null)
@@ -314,7 +317,9 @@ namespace HexRMeta.Learning
             BeginStep("step4_preview");
             ShowCard("Step 4 / 5", "Count the squeezes", "Keep your hand still and count · Round " + r, 4, CardTone.Normal);
             yield return WaitHeld();
+            countingPreview = true;   // music already down before the first squeeze
             yield return HoldFor(previewSeconds);
+            countingPreview = false;
             yield return Squeezes(count, firm, "step4_squeeze_" + count + "_" + strength);
             if (skipRequested) { log?.Trial("count_squeezes", count, strength, -1, -1, -1f, "skipped"); yield break; }
 
@@ -375,6 +380,7 @@ namespace HexRMeta.Learning
         /// <summary>count squeezes on the held hand; if the patient lets go part way, repeat once they hold again.</summary>
         private IEnumerator Squeezes(int count, bool firm, string stepName)
         {
+            squeezing = true;
             while (!skipRequested)
             {
                 Step(stepName);
@@ -399,7 +405,11 @@ namespace HexRMeta.Learning
             }
             if (attached) partnerHand.SetCurlAll(heldCurl);
             yield return Wait(0.6f);
+            squeezing = false;
         }
+
+        // Step 4 counts touches: keep the music low from the count preview through the answer.
+        private bool squeezing, countingPreview;
 
         private IEnumerator AskOneMoreOrFinish()
         {
@@ -516,6 +526,7 @@ namespace HexRMeta.Learning
         protected override void Update()
         {
             base.Update();
+            if (bgm != null) bgm.Ducked = State == TaskState.Running && (squeezing || countingPreview || answerOpen);
             ApplyOfferPose();
             HandleKeys();
             UpdateTip();

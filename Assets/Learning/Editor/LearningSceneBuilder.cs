@@ -190,6 +190,9 @@ namespace HexRMeta.Learning.EditorTools
             Set(task, "finishChoice", choice);
             Set(task, "synth", synth);
 
+            // background music (louder on the start screen, low while running, ducked in step 4)
+            AddTaskBgm(task, T1BgmPath);
+
             // start screen with the handshake animation, at the step card (shown while idle)
             PlaceStartPanel(task, AssetDatabase.LoadAssetAtPath<GameObject>(StartPanelPath) ?? MakeStartPanelPrefab());
         }

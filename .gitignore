@@ -93,3 +93,9 @@ crashlytics-build.properties
 
 # Local MCP server config
 .mcp.json
+
+# Unity crash dumps, Unity scene recovery, Blender auto-backups
+mono_crash.*
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
+*.blend1
