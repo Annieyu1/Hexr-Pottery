@@ -21,6 +21,13 @@ namespace HexRMeta.Learning.EditorTools
         // Blender book (docs/art/hub-model-checklist.md): open book with arched pages
         private const string BookOpenModelPath = "Assets/Art/Props/Hub/Hub_BookOpen.fbx";
         private const float BookModelScale = 0.556f;   // the Blender book is 1 m wide; this makes a page 0.25 m
+        // Blender music room for the piano spread (about 1 m wide); scaled so its floor fits inside the pages
+        private const string MusicRoomModelPath = "Assets/Art/Props/Hub/Hub_MusicRoom.fbx";
+        private const float MusicRoomScale = 0.45f;
+        // Blender folded-paper study room (art/scripts/build_hub_studyroom.py) for the open-bottle spread; its
+        // walls meet in one corner, which is turned 45° to point away from the seat (isometric look)
+        private const string StudyRoomModelPath = "Assets/Art/Props/Hub/Hub_StudyRoom.fbx";
+        private const float StudyRoomScale = 0.37f;
 
         // Page frame, set by the grey box or the model, used by everything placed on the book (book-local metres):
         // page width from the gutter, page depth, depth centre, front edge of the cover, and page height at (x, z).
@@ -110,9 +117,12 @@ namespace HexRMeta.Learning.EditorTools
 
                 Transform pop = Group("PopUp", spread).transform;
                 pop.localPosition = new Vector3(0f, model ? 0f : top + 0.0005f, hubZ);
-                popUps[i] = i == 0 ? MusicRoomPopUp(pop) : PlaceholderPopUp(pop, t);
+                string roomPath = i == 0 ? MusicRoomModelPath : t.scene == "T11_OpenBottle" ? StudyRoomModelPath : null;
+                var roomModel = roomPath != null ? AssetDatabase.LoadAssetAtPath<GameObject>(roomPath) : null;
+                popUps[i] = roomModel == null ? (i == 0 ? MusicRoomPopUp(pop) : PlaceholderPopUp(pop, t))
+                          : i == 0 ? MusicRoomModelPopUp(pop, roomModel) : StudyRoomModelPopUp(pop, roomModel);
                 popUps[i].SetProgress(1f);
-                if (model) SeatOnPages(book, pop);
+                if (model && roomModel == null) SeatOnPages(book, pop);
                 // under the spread, not the pop-up group: that one is switched off when folded, which would cut them
                 float mid = hubSurface(0.06f, hubZ);
                 ambients[i] = HubParticles("Particles_Drift", spread, new Vector3(0f, mid + 0.07f, hubZ + 0.07f), t.fx, false);
@@ -463,6 +473,159 @@ namespace HexRMeta.Learning.EditorTools
             HubPrim(PrimitiveType.Cube, "Flag", noteSway, new Vector3(0.02f, 0.075f, 0f), new Vector3(0f, 0f, -30f), new Vector3(0.018f, 0.006f, 0.004f), wood);
 
             return FinishPopUp(pop, hinges, sways);
+        }
+
+        /// <summary>
+        /// The Blender music room (Hub_MusicRoom.fbx) on the piano spread. Its floor is a small stage resting on
+        /// the page arch, back edge at the page's back edge; the parts are regrouped under hinges so they rise
+        /// in turn like the grey box: stage → back walls and windows → piano → bench → plant, vase → notes.
+        /// </summary>
+        private static PopUpSpread MusicRoomModelPopUp(Transform pop, GameObject model)
+        {
+            var hinges = new List<PopUpHinge>();
+            var sways = new List<PopUpSpread.Sway>();
+            GameObject room = PlaceRoom(pop, model, "MusicRoom", MusicRoomScale, 0f, true);
+
+            // stage grows out from its centre first, then the pieces stand up on it
+            GroupHinge(pop, "Stage_Hinge", Pick(room, "Floor", "Rug"), Pivot.Centre, Vector3.right, 0f, 0f,
+                       0f, 0.2f, 0f, new Vector3(0.05f, 1f, 0.05f), hinges, null, sways);
+            GroupHinge(pop, "Backdrop_Hinge", Pick(room, "Hinge_Back", "Hinge_SideR", "MusicRoom_Paper.001", "ornate stage set 3d model"),
+                       Pivot.Back, Vector3.right, -90f, 0f, 0.1f, 0.5f, 1f, new Vector3(1f, 1f, 0.15f), hinges, null, sways);
+            GroupHinge(pop, "Piano_Hinge", Pick(room, "Cube", "Cube.001", "Cube.002", "Cube.003", "Cube.004", "Cube.005", "Cube.006",
+                                                "Cube.007", "Cube.008", "Cube.009", "Cube.010", "Cylinder", "KEYBOARD"),
+                       Pivot.Front, Vector3.right, -90f, 0f, 0.3f, 0.7f, 1.4f, new Vector3(1f, 1f, 0.08f), hinges, null, sways);
+            GroupHinge(pop, "Bench_Hinge", Pick(room, "Cube.011", "Cube.012"),
+                       Pivot.Front, Vector3.right, -90f, 0f, 0.45f, 0.75f, 1.4f, new Vector3(1f, 1f, 0.15f), hinges, null, sways);
+            GroupHinge(pop, "Plant_Hinge", Pick(room, "Plant"), Pivot.Centre, Vector3.forward, 90f, 0f,
+                       0.5f, 0.85f, 1.5f, new Vector3(0.15f, 1f, 1f), hinges, new SwaySpec(3f, 4.2f, 0.1f), sways);
+            GroupHinge(pop, "Vase_Hinge", Pick(room, "Vase"), Pivot.Centre, Vector3.forward, -90f, 0f,
+                       0.55f, 0.9f, 1.5f, new Vector3(0.15f, 1f, 1f), hinges, new SwaySpec(4f, 3.3f, 0.45f), sways);
+            GroupHinge(pop, "Notes_Hinge", Pick(room, "Notes"), Pivot.Front, Vector3.right, -90f, 0f,
+                       0.7f, 1f, 2f, new Vector3(1f, 1f, 0.2f), hinges, new SwaySpec(5f, 2.6f, 0.8f), sways);
+            return FinishPopUp(pop, hinges, sways);
+        }
+
+        /// <summary>
+        /// The Blender folded-paper study room on the open-bottle spread: a small diamond-shaped stage (the room
+        /// turned 45°) in the middle of the spread, then walls → desk → chair → bookshelf, lamp, side table → plant.
+        /// </summary>
+        private static PopUpSpread StudyRoomModelPopUp(Transform pop, GameObject model)
+        {
+            var hinges = new List<PopUpHinge>();
+            var sways = new List<PopUpSpread.Sway>();
+            GameObject room = PlaceRoom(pop, model, "StudyRoom", StudyRoomScale, 45f, false);
+            GroupHinge(pop, "Stage_Hinge", Pick(room, "Floor", "Rug"), Pivot.Centre, Vector3.right, 0f, 0f,
+                       0f, 0.2f, 0f, new Vector3(0.05f, 1f, 0.05f), hinges, null, sways);
+            GroupHinge(pop, "Backdrop_Hinge", Pick(room, "Hinge_Back"), Pivot.Back, Vector3.right, -90f, 0f,
+                       0.1f, 0.5f, 1f, new Vector3(1f, 1f, 0.15f), hinges, null, sways);
+            GroupHinge(pop, "Desk_Hinge", Pick(room, "Desk"), Pivot.Front, Vector3.right, -90f, 0f,
+                       0.3f, 0.65f, 1.4f, new Vector3(1f, 1f, 0.1f), hinges, null, sways);
+            GroupHinge(pop, "Chair_Hinge", Pick(room, "Chair"), Pivot.Front, Vector3.right, -90f, 0f,
+                       0.45f, 0.75f, 1.4f, new Vector3(1f, 1f, 0.15f), hinges, null, sways);
+            GroupHinge(pop, "Bookshelf_Hinge", Pick(room, "Bookshelf"), Pivot.Centre, Vector3.forward, 90f, 0f,
+                       0.4f, 0.75f, 1.2f, new Vector3(0.15f, 1f, 1f), hinges, null, sways);
+            GroupHinge(pop, "FloorLamp_Hinge", Pick(room, "FloorLamp"), Pivot.Front, Vector3.right, -90f, 0f,
+                       0.55f, 0.85f, 1.5f, new Vector3(1f, 1f, 0.2f), hinges, new SwaySpec(2f, 4.6f, 0.3f), sways);
+            GroupHinge(pop, "SideTable_Hinge", Pick(room, "SideTable"), Pivot.Centre, Vector3.forward, -90f, 0f,
+                       0.5f, 0.85f, 1.4f, new Vector3(0.15f, 1f, 1f), hinges, null, sways);
+            GroupHinge(pop, "Plant_Hinge", Pick(room, "Plant"), Pivot.Centre, Vector3.forward, 90f, 0f,
+                       0.6f, 0.95f, 1.6f, new Vector3(0.15f, 1f, 1f), hinges, new SwaySpec(3.5f, 3.8f, 0.6f), sways);
+            return FinishPopUp(pop, hinges, sways);
+        }
+
+        /// <summary>
+        /// Instantiates a Blender room under the pop-up group (unpacked, Blender camera/light removed): turned 180°
+        /// (Blender's front is Unity's +Z) plus yaw, scaled, centred across the gutter, its floor ("Floor") either
+        /// with its back edge on the page's back edge or a little behind the page centre, and its bottom just above the highest
+        /// point of the page arch under it, so it stands like a small stage.
+        /// </summary>
+        private static GameObject PlaceRoom(Transform pop, GameObject model, string name, float scale, float yaw, bool alignBack)
+        {
+            var room = (GameObject)PrefabUtility.InstantiatePrefab(model, pop);
+            PrefabUtility.UnpackPrefabInstance(room, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            room.name = name;
+            // keep the FBX's own root transform (an exporter's axis fix lives there) and turn / scale on top of it
+            room.transform.localPosition = Vector3.zero;
+            room.transform.localRotation = Quaternion.Euler(0f, 180f + yaw, 0f) * model.transform.localRotation;
+            room.transform.localScale = model.transform.localScale * scale;
+            foreach (string n in new[] { "Camera", "Light" })
+            {
+                Transform x = room.transform.Find(n);
+                if (x != null) Object.DestroyImmediate(x.gameObject);
+            }
+
+            Transform floor = FindDeep(room.transform, "Floor");
+            Bounds fb = GroupBounds(pop, floor);
+            float z = alignBack ? hubZ + hubD * 0.5f - pop.localPosition.z - 0.005f - fb.max.z
+                                : hubZ + 0.035f - pop.localPosition.z - fb.center.z;   // a little back: clear of the title
+            room.transform.localPosition += new Vector3(-fb.center.x, 0f, z);
+            fb = GroupBounds(pop, floor);
+            float top = float.NegativeInfinity;
+            for (int ix = 0; ix <= 8; ix++)
+                for (int iz = 0; iz <= 4; iz++)
+                    top = Mathf.Max(top, hubSurface(Mathf.Lerp(fb.min.x, fb.max.x, ix / 8f),
+                                                    pop.localPosition.z + Mathf.Lerp(fb.min.z, fb.max.z, iz / 4f)));
+            room.transform.localPosition += Vector3.up * (top - pop.localPosition.y + 0.001f - fb.min.y);
+            return room;
+        }
+
+        private enum Pivot { Front, Back, Centre }
+
+        private struct SwaySpec
+        {
+            public float degrees, period, phase;
+            public SwaySpec(float d, float p, float ph) { degrees = d; period = p; phase = ph; }
+        }
+
+        /// <summary>
+        /// Moves the given parts under a new hinge on the fold line (bottom of their bounds: front edge, back edge
+        /// or centre), keeping them where they are. With a sway, they sit under an extra "Sway" node at the hinge.
+        /// </summary>
+        private static void GroupHinge(Transform pop, string name, List<Transform> parts, Pivot pivot, Vector3 axis,
+                                       float folded, float open, float from, float to, float bounce, Vector3 flatScale,
+                                       List<PopUpHinge> hinges, SwaySpec? sway, List<PopUpSpread.Sway> sways)
+        {
+            if (parts.Count == 0) { Debug.LogWarning("[LearningSceneBuilder] Music room: nothing for " + name); return; }
+            Bounds b = GroupBounds(pop, parts.ToArray());
+            float z = pivot == Pivot.Front ? b.min.z : pivot == Pivot.Back ? b.max.z : b.center.z;
+            Transform h = Hinge(pop, name, new Vector3(b.center.x, b.min.y, z), axis, folded, open, from, to, bounce, flatScale, hinges);
+            Transform holder = h;
+            if (sway.HasValue)
+                holder = SwayGroup(h, "Sway", Vector3.zero, Vector3.forward, sway.Value.degrees, sway.Value.period, sway.Value.phase, sways);
+            foreach (Transform p in parts) p.SetParent(holder, true);
+        }
+
+        private static List<Transform> Pick(GameObject room, params string[] names)
+        {
+            var list = new List<Transform>();
+            foreach (string n in names)
+            {
+                Transform t = FindDeep(room.transform, n);
+                if (t != null) list.Add(t);
+                else Debug.LogWarning("[LearningSceneBuilder] Music room part not found: " + n);
+            }
+            return list;
+        }
+
+        private static Transform FindDeep(Transform root, string name)
+        {
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == name) return t;
+            return null;
+        }
+
+        private static Bounds GroupBounds(Transform space, params Transform[] parts)
+        {
+            bool any = false;
+            var b = new Bounds();
+            foreach (Transform p in parts)
+                foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true))
+                {
+                    Bounds lb = LocalBounds(space, r);
+                    if (!any) { b = lb; any = true; }
+                    else b.Encapsulate(lb);
+                }
+            return b;
         }
 
         /// <summary>Stand-in for spreads without art yet: a backdrop card and one block in the task's colour.</summary>

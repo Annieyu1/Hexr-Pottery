@@ -5,6 +5,9 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 1
+    path: Assets/HexRStages/Scenes/HexR_Stages.unity
+    guid: 094b95c046d324bceb2ff6fdb8178fcc
   - enabled: 0
     path: Assets/Scenes/Pressure_Demo_Room.unity
     guid: 655b2cc933cc14c43b4be956ead1b4ac
