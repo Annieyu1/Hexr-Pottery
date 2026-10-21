@@ -43,7 +43,7 @@ namespace HexRMeta.Learning.EditorTools
         public static void BuildT1() { Build("T1_HandHold", BuildHandHold); }
 
         [MenuItem("HexRMeta/Learning/Build T2 Piano Scene")]
-        public static void BuildT2() { Build("T2_Piano", BuildPiano); }
+        public static void BuildT2() { Build("T2_Piano", BuildPiano, StudyRoomTemplate); }
 
         [MenuItem("HexRMeta/Learning/Build T5 Eating Scene")]
         public static void BuildT5() { Build("T5_Eating", BuildEating); }
@@ -51,24 +51,25 @@ namespace HexRMeta.Learning.EditorTools
         [MenuItem("HexRMeta/Learning/Build T11 Open Bottle Scene")]
         public static void BuildT11() { Build("T11_OpenBottle", BuildBottle); }
 
-        private static void Build(string name, System.Action<Transform> content)
+        private static void Build(string name, System.Action<Transform> content, string template = TemplateScene)
         {
+            string tpl = File.Exists(template) ? template : TemplateScene;
             string target = SceneDir + "/" + name + ".unity";
-            if (!File.Exists(TemplateScene))
+            if (!File.Exists(tpl))
             {
-                EditorUtility.DisplayDialog("Learning", "Template not found: " + TemplateScene, "OK");
+                EditorUtility.DisplayDialog("Learning", "Template not found: " + tpl, "OK");
                 return;
             }
             if (File.Exists(target) && !Application.isBatchMode && !SkipConfirm && !EditorUtility.DisplayDialog("Learning",
-                    target + " exists. Rebuild it from " + TemplateScene + "? Edits in it are lost.", "Rebuild", "Cancel"))
+                    target + " exists. Rebuild it from " + tpl + "? Edits in it are lost.", "Rebuild", "Cancel"))
                 return;
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             Directory.CreateDirectory(SceneDir);
             AssetDatabase.DeleteAsset(target);
-            if (!AssetDatabase.CopyAsset(TemplateScene, target))
+            if (!AssetDatabase.CopyAsset(tpl, target))
             {
-                Debug.LogError("[LearningSceneBuilder] Could not copy " + TemplateScene);
+                Debug.LogError("[LearningSceneBuilder] Could not copy " + tpl);
                 return;
             }
             Scene scene = EditorSceneManager.OpenScene(target, OpenSceneMode.Single);
@@ -110,7 +111,11 @@ namespace HexRMeta.Learning.EditorTools
             deskTop = rigPos.y + 0.75f;
             float nearEdge = 0.35f;
             // The template's desk top is "DeskSurface" (the "Desk" group also holds a floor shadow).
-            GameObject desk = Find(scene, "DeskSurface") ?? Find(scene, "Desk");
+            // Blender study room first (its desk is "HexR_StudyRoom/Desk"), else the template's grey desk.
+            GameObject room = Find(scene, "HexR_StudyRoom");
+            Transform roomDesk = room != null ? room.transform.Find("Desk") : null;
+            GameObject desk = roomDesk != null ? roomDesk.gameObject : Find(scene, "DeskSurface") ?? Find(scene, "Desk");
+            float deskAcross = 0f;   // desk centre beside the rig (0 in the grey template)
             Renderer dr = desk != null ? desk.GetComponentInChildren<Renderer>(true) : null;
             if (dr != null)
             {
@@ -118,9 +123,10 @@ namespace HexRMeta.Learning.EditorTools
                 deskTop = b.max.y;
                 float halfDepth = Mathf.Abs(b.extents.x * fwd.x) + Mathf.Abs(b.extents.z * fwd.z);
                 nearEdge = Vector3.Dot(b.center - rigPos, fwd) - halfDepth;
+                deskAcross = Vector3.Dot(b.center - rigPos, rgt);
             }
             else Debug.LogWarning("[LearningSceneBuilder] No 'Desk' found; assuming a desk top at 0.75 m.");
-            Vector3 p = rigPos + fwd * (nearEdge + 0.20f) + rgt * (0.12f * sideSign);
+            Vector3 p = rigPos + fwd * (nearEdge + 0.20f) + rgt * (deskAcross + 0.12f * sideSign);
             anchor = new Vector3(p.x, deskTop, p.z);
         }
 
@@ -183,6 +189,9 @@ namespace HexRMeta.Learning.EditorTools
             Set(task, "answerButtons", answers);
             Set(task, "finishChoice", choice);
             Set(task, "synth", synth);
+
+            // start screen with the handshake animation, at the step card (shown while idle)
+            PlaceStartPanel(task, AssetDatabase.LoadAssetAtPath<GameObject>(StartPanelPath) ?? MakeStartPanelPrefab());
         }
 
         // ------------------------------------------------------------------ T5 eating

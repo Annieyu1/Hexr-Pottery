@@ -34,6 +34,9 @@ namespace HexRMeta.Learning
         [SerializeField] private Sprite checkIcon;
         [Tooltip("Card size in design px.")]
         [SerializeField] private Vector2 sizePx = new Vector2(380f, 240f);
+        [Tooltip("Main colour of chip, progress bar and icon (T1: teal; T2 menu style: honey).")]
+        [SerializeField] private Color accent = Teal;
+        [SerializeField] private Color accentTint = TealTint;
 
         private string chipText = "", titleText = "", hintText = "";
         private int filled;
@@ -73,11 +76,11 @@ namespace HexRMeta.Learning
             Color chipBg, chipFg, bar, circle, iconColor;
             switch (tone)
             {
-                case CardTone.Answer: chipBg = Yellow; chipFg = YellowText; bar = Teal; circle = TealTint; iconColor = Teal; break;
+                case CardTone.Answer: chipBg = Yellow; chipFg = YellowText; bar = accent; circle = accentTint; iconColor = accent; break;
                 case CardTone.Done: chipBg = Green; chipFg = Color.white; bar = Green; circle = Green; iconColor = Color.white; break;
-                case CardTone.Correct: chipBg = Green; chipFg = Color.white; bar = Green; circle = TealTint; iconColor = Teal; break;
-                case CardTone.Wrong: chipBg = Red; chipFg = Color.white; bar = Red; circle = TealTint; iconColor = Teal; break;
-                default: chipBg = Teal; chipFg = Color.white; bar = Teal; circle = TealTint; iconColor = Teal; break;
+                case CardTone.Correct: chipBg = Green; chipFg = Color.white; bar = Green; circle = accentTint; iconColor = accent; break;
+                case CardTone.Wrong: chipBg = Red; chipFg = Color.white; bar = Red; circle = accentTint; iconColor = accent; break;
+                default: chipBg = accent; chipFg = Color.white; bar = accent; circle = accentTint; iconColor = accent; break;
             }
             if (chip != null) chip.color = chipBg;
             if (chipLabel != null) { chipLabel.text = tone == CardTone.Done ? "Done" : chipText; chipLabel.color = chipFg; }

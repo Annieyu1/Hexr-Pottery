@@ -5,12 +5,18 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
+    path: Assets/Scenes/Pressure_Demo_Room.unity
+    guid: 655b2cc933cc14c43b4be956ead1b4ac
+  - enabled: 0
     path: Assets/Scenes/Pressure_Demo.unity
     guid: fe66ccc8d77ff4ef0a673f0e5f66c14b
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Meta.unity
     guid: 450b19f5795a34164a81f6d23c97b115
+  - enabled: 1
+    path: Assets/Learning/Scenes/T1_HandHold.unity
+    guid: 3bfb08897e18e4458929359ef92ad4b6
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 7ad12a68e96817a4fb4fe4267015b83a, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: fa42c867ad27fbd448afb69a299f5913, type: 2}

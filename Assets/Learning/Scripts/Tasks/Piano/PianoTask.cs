@@ -12,6 +12,18 @@ namespace HexRMeta.Learning
     public enum TouchCueKind { Vibrate, Press }
     public enum TestTiming { Wait, Tempo }
 
+    /// <summary>What the menu's result screen shows after a run (one song).</summary>
+    public class PianoRunResult
+    {
+        public PianoLevel level;
+        public string song = "";
+        public int notes;
+        public int correct;            // right first time (L2, L3)
+        public float accuracy = -1f;   // 0..1, -1 = not scored (L1)
+        public float seconds;          // first note to the end of the song
+        public bool completed;         // false = ended early (End button, scene closed)
+    }
+
     /// <summary>
     /// T2 piano (docs/12), three levels in one scene. The keyboard lines up with the real table under
     /// the patient's own tracked hand (calibration step).
@@ -98,10 +110,36 @@ namespace HexRMeta.Learning
         [Tooltip("Hand still on the table this long to take the rest pose (s).")]
         [SerializeField] private float restSeconds = 3f;
         [SerializeField] private float fingerSeconds = 5f;
+        [Tooltip("L1: the hand only needs to settle this long (s) — Listen asks nothing of the hand, so placing it is easy.")]
+        [SerializeField] private float listenRestSeconds = 1f;
+        [Tooltip("L1: the palm may drift this much while settling (m); L2/L3 use 1.5 cm.")]
+        [SerializeField] private float listenStillMeters = 0.04f;
+        [Tooltip("L1: start anyway after this long (s), with the hand where it is (or the keyboard where it was).")]
+        [SerializeField] private float listenGiveUpSeconds = 6f;
         [Tooltip("Key tops sit this far below the tracked fingertip joints (finger pad, m).")]
         [SerializeField] private float padOffset = 0.008f;
         [SerializeField] private bool recordFlex = true;
         [SerializeField] private float flexHz = 30f;
+
+        [Header("T2 hand on the keys")]
+        [Tooltip("Ghost of the patient's hand where it should rest on the keys (shown while placing it, and when it wanders off).")]
+        [SerializeField] private StylizedHand ghostHand;
+        [Tooltip("While a song plays: pause when the hand leaves its place on the keys, go on when it is back.")]
+        [SerializeField] private bool pauseWhenHandLeaves = true;
+        [Tooltip("Palm further than this from its place = the hand has left (m).")]
+        [SerializeField] private float leaveDistance = 0.08f;
+        [Tooltip("...for this long (s). A lost hand (not tracked) counts as left after lostSeconds.")]
+        [SerializeField] private float leaveSeconds = 0.6f;
+        [SerializeField] private float lostSeconds = 1f;
+        [Tooltip("Palm within this of its place = back (m), for returnSeconds.")]
+        [SerializeField] private float returnDistance = 0.05f;
+        [SerializeField] private float returnSeconds = 0.5f;
+
+        [Header("T2 menu")]
+        [Tooltip("Started from the menu: L1 / L2 play the chosen song once, then the menu shows the result. Off = rounds until the time limit.")]
+        [SerializeField] private bool oneSongPerRun = true;
+        [Tooltip("Fade to warm black that hides the rig shift when the real table is lined up (optional).")]
+        [SerializeField] private ScreenFade fade;
 
         [Header("T2 desk alignment")]
         [Tooltip("After the rest pose, move the VR rig up/down so the real table lines up with the virtual desk.")]
@@ -132,12 +170,46 @@ namespace HexRMeta.Learning
         private float tryAgainUntil = -1f;
         private int currentSeg;
         private float deskShift;             // total rig shift so far (m)
+        private float runStart = -1f;        // clock at the first note of this run
+        private int runNotes, runCorrect;
+        // where the hand rests, in keyboard space (recorded at calibration; a default until then)
+        private bool hasHandPlace;
+        private Vector3 placePalm, placeIndex, placeMiddle, placeLittle;
+        private bool inSong, autoPaused;
+        private float awayTimer, backTimer;
+        private MaterialPropertyBlock ghostBlock;
+        private Renderer[] ghostRenderers;
+        private Color ghostColor = new Color(0.25f, 0.76f, 0.79f, 0.35f);
+        private float testPlaySeconds;
+
+        /// <summary>Raised when a run ends (song done, or ended early). The menu shows the result.</summary>
+        public event System.Action<PianoRunResult> RunEnded;
+        public PianoRunResult LastResult { get; private set; }
+
+        // settings the menu reads and changes
+        public PianoLevel Level => level;
+        public int SongIndex => songIndex;
+        public IReadOnlyList<PianoSong> Songs => songs;
+        public bool CueVisual => cueVisual;
+        public bool CueTouch => cueTouch;
+        public bool PianoSound => pianoSound;
+        public float TouchStrength => touchStrength;
+        public float Tempo => tempo;
+        public PianoKeyboard PianoKeys => keyboard;
+        public ToneSynth Synth => synth;
+
+        public void SelectSong(int index)
+        {
+            if (songs.Count == 0 || State == TaskState.Running || State == TaskState.Paused) return;
+            songIndex = Mathf.Clamp(index, 0, songs.Count - 1);
+            ShowLabels(SelectedSong);
+        }
         private readonly bool[] autoDown = new bool[5];
         private string panelCache;
 
         protected override string TaskName => "T2_Piano";
         protected override bool HideTrackedHandsInWatch => false;
-        protected override string BodyEndReason => level == PianoLevel.Test ? "completed" : "time_up";
+        protected override string BodyEndReason => level == PianoLevel.Test || oneSongPerRun ? "completed" : "time_up";
 
         private PianoSong SelectedSong => songs.Count == 0 ? null : songs[Mathf.Clamp(songIndex, 0, songs.Count - 1)];
 
@@ -155,6 +227,7 @@ namespace HexRMeta.Learning
             }
             ShowLabels(SelectedSong);
             card?.Show("T2 Piano", "Press Start", LevelName(level), 0, CardTone.Normal);
+            if (oneSongPerRun) card?.gameObject.SetActive(false);   // the menu is showing instead
             RefreshPanel();
         }
 
@@ -171,6 +244,8 @@ namespace HexRMeta.Learning
                 pianoLog.Flex(clock, LevelTag, noteIndex, detector.Tracked || detector.Simulating, detector);
             }
             UpdateRatingPopup();
+            WatchHand();
+            PulseGhost();
             RefreshPanel();
         }
 
@@ -181,6 +256,8 @@ namespace HexRMeta.Learning
             testTrials.Clear();
             pending.Clear();
             HideRating();
+            runStart = -1f; runNotes = 0; runCorrect = 0; testPlaySeconds = 0f;
+            card?.gameObject.SetActive(true);
             clock = 0f;
             nextFlex = 0f;
             if (log != null) log.Mode = LevelTag;
@@ -191,7 +268,15 @@ namespace HexRMeta.Learning
 
         protected override IEnumerator Body()
         {
-            return level == PianoLevel.Test ? TestBody() : base.Body();
+            if (level == PianoLevel.Test) return TestBody();
+            return oneSongPerRun ? OneSong() : base.Body();
+        }
+
+        private IEnumerator OneSong()
+        {
+            round = 1;
+            if (log != null) log.Round = round;
+            yield return RunRound(1);
         }
 
         private IEnumerator TestBody()
@@ -226,26 +311,33 @@ namespace HexRMeta.Learning
                 detector.SetSimulation(true);
                 PlaceKeyboardOnHand();
                 WriteCalibration(true);
-                card?.Show("Setup", "Desktop test", "Keys 1-5 press thumb to little", 5, CardTone.Normal);
+                card?.Show("Get ready", "Desktop test", "Keys 1-5 press thumb to little", 5, CardTone.Normal);
                 yield return Wait(2f);
                 yield break;
             }
             detector.SetSimulation(false);
 
             // 1) rest pose: hand on the table, still
-            card?.Show("Setup", "Rest your hand on the table", "Fingers relaxed · keep still", 0, CardTone.Normal);
+            bool listen = level == PianoLevel.Listen;
+            float needStill = listen ? listenRestSeconds : restSeconds;
+            float tolerance = listen ? listenStillMeters : 0.015f;
+            card?.Show("Get ready", "Rest your hand on the keys", "Relax, keep still", 0, CardTone.Normal);
+            ShowGhost(true);
             var sum = new Vector3[5];
             var tipSum = new Vector3[5];
             Vector3 dirSum = Vector3.zero;
+            Vector3 palmSum = Vector3.zero, idxSum = Vector3.zero, midSum = Vector3.zero, litSum = Vector3.zero;
             int samples = 0;
             float still = 0f, waited = 0f;
             Vector3 anchorPalm = Vector3.zero;
             bool hinted = false;
-            while (still < restSeconds)
+            while (still < needStill)
             {
                 yield return null;
                 if (State != TaskState.Running) continue;
                 waited += Time.deltaTime;
+                // L1 never gets stuck here: after a few seconds it starts with whatever it has
+                if (listen && waited > listenGiveUpSeconds) break;
                 if (!hinted && waited > 10f)
                 {
                     hinted = true;
@@ -253,28 +345,50 @@ namespace HexRMeta.Learning
                 }
                 if (!detector.Tracked) { still = 0f; samples = 0; continue; }
                 Vector3 palm = patientHand.Palm;
-                if (samples == 0 || (palm - anchorPalm).magnitude > 0.015f)
+                if (samples == 0 || (palm - anchorPalm).magnitude > tolerance)
                 {
                     anchorPalm = palm;
                     still = 0f;
                     samples = 0;
                     for (int f = 0; f < 5; f++) { sum[f] = Vector3.zero; tipSum[f] = Vector3.zero; }
                     dirSum = Vector3.zero;
+                    palmSum = idxSum = midSum = litSum = Vector3.zero;
                 }
                 still += Time.deltaTime;
                 samples++;
                 for (int f = 0; f < 5; f++) { sum[f] += detector.Pose(f); tipSum[f] += patientHand.Tip(f); }
                 dirSum += patientHand.FingerDir;
+                palmSum += patientHand.Palm;
+                idxSum += patientHand.Knuckle(1);
+                midSum += patientHand.Knuckle(2);
+                litSum += patientHand.Knuckle(4);
+            }
+            if (samples == 0)
+            {
+                // L1 gave up without ever seeing the hand: keep the keyboard where it is and play
+                Step("listen_hand_not_found");
+                ShowGhost(false);
+                card?.SetTone(CardTone.Done);
+                yield return KeyWave(0.07f);
+                yield break;
             }
             var restPose = new Vector3[5];
             var tipsByKey = new Vector3[5];
             for (int f = 0; f < 5; f++) restPose[f] = sum[f] / samples;
             for (int k = 0; k < 5; k++) tipsByKey[k] = tipSum[FingerFor(k)] / samples;
+            // the rig shift is hidden behind a short fade to warm black
+            bool fading = fade != null && alignToDesk && rig != null;
+            if (fading) yield return fade.FadeOut(0.25f);
+            float shiftBefore = deskShift;
             AlignRigToDesk(tipsByKey);
             detector.SetRest(restPose);
             keyboard?.Place(tipsByKey, padOffset, KeyFor(0), dirSum);
+            RecordHandPlace(palmSum / samples, idxSum / samples, midSum / samples, litSum / samples, deskShift - shiftBefore);
+            ShowGhost(false);
+            if (fading) yield return fade.FadeIn(0.35f);
             card?.SetTone(CardTone.Done);
-            yield return Wait(0.8f);
+            yield return KeyWave(0.07f);
+            yield return Wait(0.4f);
             if (level == PianoLevel.Listen) yield break;   // L1 only needs the keys under the hand
 
             // 2) each finger presses once, as far as is comfortable
@@ -282,7 +396,7 @@ namespace HexRMeta.Learning
             {
                 int key = KeyFor(f);
                 Step("calibrate_" + ((HandFinger)f));
-                card?.Show("Setup", "Press with your " + FingerWord(f), "As far as is comfortable, then relax", f + 1, CardTone.Normal);
+                card?.Show("Get ready", "Press with your " + FingerWord(f), "As far as is comfortable, then relax", f + 1, CardTone.Normal);
                 keyboard?.SetLit(key, true);
                 fingerGlow?.Set(f, true);
                 TouchCue(ChannelFor(f), "CAL_" + (HandFinger)f);
@@ -307,7 +421,7 @@ namespace HexRMeta.Learning
                 yield return Wait(0.5f);
             }
             WriteCalibration(false);
-            card?.Show("Setup", "Ready", "", 5, CardTone.Done);
+            card?.Show("Get ready", "Ready", "", 5, CardTone.Done);
             yield return Wait(1f);
         }
 
@@ -370,6 +484,7 @@ namespace HexRMeta.Learning
             Step("listen:" + song.title);
             card?.Show(LevelName(PianoLevel.Listen), song.title, "Relax your hand and feel each note", 0, CardTone.Normal);
             yield return Wait(2f);
+            inSong = true;
             List<PianoSong.Note> notes = song.Parse();
             for (int i = 0; i < notes.Count; i++)
             {
@@ -380,6 +495,8 @@ namespace HexRMeta.Learning
                 if (note.keys.Length == 0) { yield return Wait(duration); continue; }
 
                 Step(song.title + "#" + noteIndex);
+                if (runStart < 0f) runStart = clock;
+                runNotes++;
                 float pressFor = Mathf.Min(listenPressSeconds, duration * 0.6f);
                 GloveChannels ch = GloveChannels.None;
                 foreach (int k in note.keys)
@@ -399,6 +516,7 @@ namespace HexRMeta.Learning
                 }
                 yield return Wait(duration - pressFor);
             }
+            inSong = false;
             card?.SetTone(CardTone.Done, "Done");
             yield return Wait(2.5f);
         }
@@ -410,6 +528,7 @@ namespace HexRMeta.Learning
             Step("learn:" + song.title);
             card?.Show(LevelName(PianoLevel.Learn), song.title, LearnHint(), 0, CardTone.Normal);
             yield return Wait(2f);
+            inSong = true;
             List<PianoSong.Note> notes = song.Parse();
             for (int i = 0; i < notes.Count; i++)
             {
@@ -420,6 +539,7 @@ namespace HexRMeta.Learning
                 yield return LearnNote(notes[i]);
                 yield return Wait(gapAfterNote);
             }
+            inSong = false;
             card?.SetTone(CardTone.Done, "Done");
             yield return Wait(2f);
         }
@@ -434,6 +554,7 @@ namespace HexRMeta.Learning
             waiting = n;
             skipRequested = false;
             tryAgainUntil = -1f;
+            if (runStart < 0f) runStart = clock;
             foreach (Cue c in CueOrder()) FireCue(c, note.keys);
             float lastTouch = clock;
             bool visualOn = cueVisual;
@@ -460,6 +581,8 @@ namespace HexRMeta.Learning
             skipRequested = false;
             ClearCues(note.keys);
             Close(n);
+            runNotes++;
+            if (n.correct) runCorrect++;
         }
 
         /// <summary>L2 wrong key: say so, keep the glow, feel the right finger again.</summary>
@@ -488,6 +611,7 @@ namespace HexRMeta.Learning
             Step("test:" + song.title + " cues=" + CueTag + " " + testTiming);
             card?.Show(LevelName(PianoLevel.Test), song.title, "Play the song", 0, CardTone.Normal);
             yield return Wait(2f);
+            inSong = true;
             List<PianoSong.Note> notes = song.Parse();
 
             if (testTiming == TestTiming.Wait)
@@ -557,16 +681,24 @@ namespace HexRMeta.Learning
                 yield return Wait(prevHalf);
                 CloseExpiredTempoNotes(true);
             }
+            inSong = false;
             float playSeconds = testStart >= 0f ? clock - testStart : 0f;
             testStart = -1f;
-            PianoTestSummary sum = WriteTestSummary(song, playSeconds);
+            testPlaySeconds = playSeconds;
+            WriteTestSummary(song, playSeconds);
             yield return Wait(ratingSeconds);
             HideRating();
-            int seconds = Mathf.RoundToInt(playSeconds);
-            card?.Show(LevelName(PianoLevel.Test), "Congratulations!",
-                       "Accuracy " + Mathf.RoundToInt(sum.accuracy * 100f) + "%  ·  Time " + seconds / 60 + ":" + (seconds % 60).ToString("00"),
-                       5, CardTone.Done);
-            yield return Wait(4f);
+            // the menu's result screen shows Congratulations, accuracy and time
+            if (!oneSongPerRun)
+            {
+                int seconds = Mathf.RoundToInt(playSeconds);
+                int acc = 0, n = 0;
+                foreach (PianoNoteTrial t in testTrials) { n++; if (t.correct) acc++; }
+                card?.Show(LevelName(PianoLevel.Test), "Congratulations!",
+                           "Accuracy " + (n > 0 ? Mathf.RoundToInt(100f * acc / n) : 0) + "%  ·  Time " + seconds / 60 + ":" + (seconds % 60).ToString("00"),
+                           5, CardTone.Done);
+                yield return Wait(4f);
+            }
         }
 
         private void CloseExpiredTempoNotes(bool all)
@@ -994,6 +1126,7 @@ namespace HexRMeta.Learning
 
         protected override void OnPaused(bool paused)
         {
+            if (!paused && autoPaused) { autoPaused = false; ShowGhost(false); RestoreCard(); }
             if (paused) { keyboard?.ReleaseAll(); detector?.ReleaseAll(); }
         }
 
@@ -1005,12 +1138,162 @@ namespace HexRMeta.Learning
             pianoLog?.Dispose();
             pianoLog = null;
             for (int k = 0; k < 5; k++) autoDown[k] = false;
+            inSong = false;
+            autoPaused = false;
+            ShowGhost(false);
             keyboard?.ReleaseAll();
             keyboard?.ClearLights();
             fingerGlow?.AllOff();
             HideRating();
-            if (EndReason != "completed" || level != PianoLevel.Test)
+
+            var r = new PianoRunResult { level = level, song = current != null ? current.title : "", completed = EndReason == "completed" };
+            if (level == PianoLevel.Test)
+            {
+                foreach (PianoNoteTrial t in testTrials) { r.notes++; if (t.correct) r.correct++; }
+                r.seconds = testPlaySeconds;
+            }
+            else
+            {
+                r.notes = runNotes;
+                r.correct = runCorrect;
+                r.seconds = runStart >= 0f ? clock - runStart : 0f;
+            }
+            if (level != PianoLevel.Listen && r.notes > 0) r.accuracy = r.correct / (float)r.notes;
+            LastResult = r;
+
+            if (oneSongPerRun) card?.gameObject.SetActive(false);
+            else if (EndReason != "completed" || level != PianoLevel.Test)
                 card?.Show(LevelName(level), "Well done!", "That's all for now", 5, CardTone.Done);
+            RunEnded?.Invoke(r);
+        }
+
+        // ------------------------------------------------------------------ hand on the keys
+
+        /// <summary>Remember where the hand rests, in keyboard space (so it follows the keyboard).</summary>
+        private void RecordHandPlace(Vector3 palm, Vector3 index, Vector3 middle, Vector3 little, float rigShift)
+        {
+            if (keyboard == null) return;
+            Vector3 up = Vector3.up * rigShift;      // the rig moved after the hand was measured
+            Transform k = keyboard.transform;
+            placePalm = k.InverseTransformPoint(palm + up);
+            placeIndex = k.InverseTransformPoint(index + up);
+            placeMiddle = k.InverseTransformPoint(middle + up);
+            placeLittle = k.InverseTransformPoint(little + up);
+            hasHandPlace = true;
+        }
+
+        /// <summary>Where the palm and knuckles should be (world). Before calibration: a hand resting on C..G.</summary>
+        private void HandPlace(out Vector3 palm, out Vector3 index, out Vector3 middle, out Vector3 little)
+        {
+            Transform k = keyboard != null ? keyboard.transform : transform;
+            if (hasHandPlace)
+            {
+                palm = k.TransformPoint(placePalm); index = k.TransformPoint(placeIndex);
+                middle = k.TransformPoint(placeMiddle); little = k.TransformPoint(placeLittle);
+                return;
+            }
+            float sp = keyboard != null ? keyboard.Spacing : 0.022f;
+            Vector3 Knuckle(int finger) => k.TransformPoint(new Vector3((KeyFor(finger) - 2) * sp * 0.9f, 0.035f, -0.055f));
+            palm = k.TransformPoint(new Vector3(0f, 0.035f, -0.085f));
+            index = Knuckle(1); middle = Knuckle(2); little = Knuckle(4);
+        }
+
+        /// <summary>Show / hide the ghost hand, lined up palm-and-knuckles with the hand's place.</summary>
+        private void ShowGhost(bool on)
+        {
+            if (ghostHand == null) return;
+            ghostHand.gameObject.SetActive(on);
+            if (!on) return;
+            HandPlace(out Vector3 palm, out Vector3 index, out Vector3 middle, out Vector3 little);
+            Transform g = ghostHand.transform;
+            Quaternion now = Frame(ghostHand.Contact(5).position, ghostHand.Joint(HandFinger.Index, 0).position,
+                                   ghostHand.Joint(HandFinger.Middle, 0).position, ghostHand.Joint(HandFinger.Little, 0).position);
+            g.rotation = Frame(palm, index, middle, little) * Quaternion.Inverse(now) * g.rotation;
+            g.position += palm - ghostHand.Contact(5).position;
+            if (hasHandPlace || keyboard == null) return;
+            // default place: the four fingertips rest on the key tops at the fingertip line
+            Transform k = keyboard.transform;
+            Vector3 tips = Vector3.zero;
+            for (int f = 1; f < 5; f++) tips += k.InverseTransformPoint(ghostHand.Contact(f).position);
+            tips /= 4f;
+            g.position += k.TransformVector(new Vector3(0f, padOffset - tips.y, -tips.z));
+        }
+
+        /// <summary>Hand frame from palm and knuckles (the same rule for the ghost and the real hand).</summary>
+        private static Quaternion Frame(Vector3 palm, Vector3 index, Vector3 middle, Vector3 little)
+        {
+            Vector3 f = middle - palm;
+            Vector3 a = index - little;
+            Vector3 up = Vector3.Cross(f, a);
+            return f.sqrMagnitude > 1e-8f && up.sqrMagnitude > 1e-8f ? Quaternion.LookRotation(f, up) : Quaternion.identity;
+        }
+
+        private void PulseGhost()
+        {
+            if (ghostHand == null || !ghostHand.gameObject.activeSelf) return;
+            if (ghostRenderers == null) ghostRenderers = ghostHand.GetComponentsInChildren<Renderer>(true);
+            if (ghostBlock == null) ghostBlock = new MaterialPropertyBlock();
+            Color c = ghostColor;
+            c.a *= 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * 3f);
+            ghostBlock.SetColor("_BaseColor", c);
+            foreach (Renderer r in ghostRenderers) if (r != null) r.SetPropertyBlock(ghostBlock);
+        }
+
+        /// <summary>
+        /// While a song plays: a hand that leaves its place (or is lost) pauses the song and shows the
+        /// ghost hand; when the hand is back on the ghost, the song goes on by itself.
+        /// </summary>
+        private void WatchHand()
+        {
+            if (!pauseWhenHandLeaves || !inSong || detector == null || detector.Simulating || patientHand == null) return;
+            HandPlace(out Vector3 palm, out _, out _, out _);
+            bool tracked = detector.Tracked;
+            float d = tracked ? Vector3.Distance(patientHand.Palm, palm) : float.PositiveInfinity;
+            float dt = Time.unscaledDeltaTime;
+
+            if (State == TaskState.Running && !autoPaused)
+            {
+                awayTimer = d > leaveDistance ? awayTimer + dt : 0f;
+                if (awayTimer > (tracked ? leaveSeconds : lostSeconds))
+                {
+                    awayTimer = 0f;
+                    backTimer = 0f;
+                    autoPaused = true;
+                    Step("hand_left");
+                    PauseTask();
+                    ShowGhost(true);
+                    card?.Show(LevelName(level), "Rest your hand on the keys", "Put it back on the ghost hand", currentSeg, CardTone.Answer);
+                }
+            }
+            else if (State == TaskState.Paused && autoPaused)
+            {
+                backTimer = d < returnDistance ? backTimer + dt : 0f;
+                if (backTimer > returnSeconds)
+                {
+                    autoPaused = false;
+                    Step("hand_back");
+                    ShowGhost(false);
+                    RestoreCard();
+                    ResumeTask();
+                }
+            }
+        }
+
+        private void RestoreCard()
+        {
+            if (current != null) card?.Show(LevelName(level), current.title, CurrentHint(), currentSeg, CardTone.Normal);
+        }
+
+        /// <summary>The five playable keys light up left to right once (ready / celebrate).</summary>
+        public IEnumerator KeyWave(float step)
+        {
+            if (keyboard == null) yield break;
+            for (int k = 0; k < 5; k++)
+            {
+                keyboard.SetLit(k, true);
+                yield return new WaitForSeconds(step);
+                keyboard.SetLit(k, false);
+            }
         }
     }
 }

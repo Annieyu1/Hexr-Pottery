@@ -1884,6 +1884,8 @@ MonoBehaviour:
   handIcon: {fileID: 21300000, guid: c4247c3d2afb3487fa5a12d30f176940, type: 3}
   checkIcon: {fileID: 21300000, guid: 51d827cc37b7d4c13a4cc6d205ca5848, type: 3}
   sizePx: {x: 380, y: 240}
+  accent: {r: 0, g: 0.7058824, b: 0.78039217, a: 1}
+  accentTint: {r: 0.8666667, g: 0.9607843, b: 0.972549, a: 1}
 --- !u!4 &175955112
 Transform:
   m_ObjectHideFlags: 0
@@ -2194,7 +2196,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: 8b26b298-7bf4-490e-b245-a039c0184303
-  instanceId: cd5d1aae-43d6-43c6-89ff-911a90dae853
+  instanceId: 2a2db165-6c5c-43b5-a322-d5e2313c7eeb
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -5350,6 +5352,7 @@ Transform:
   - {fileID: 1139919673}
   - {fileID: 159326132}
   - {fileID: 48738326}
+  - {fileID: 551242337}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &535029878
@@ -5444,6 +5447,83 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
   m_BlendShapeWeights: []
+--- !u!1001 &551242336
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 513184442}
+    m_Modifications:
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.34499997
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.33999997
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8724013565166225649, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_Name
+      value: T1StartPanel
+      objectReference: {fileID: 0}
+    - target: {fileID: 8724013565166225649, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+--- !u!4 &551242337 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2395041074811532570, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+  m_PrefabInstance: {fileID: 551242336}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &551242338 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8078051250237584802, guid: fac2abdf3b46a466ebeb1aee474082ed, type: 3}
+  m_PrefabInstance: {fileID: 551242336}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 794c650c2c8ad4ac19c8f475eba7eaaa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HexRMeta.Learning.T1StartPanel
 --- !u!1001 &571651650
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -10247,6 +10327,7 @@ MonoBehaviour:
   squeezeCounts: 020000000300000004000000i
   minQuizRounds: 5
   card: {fileID: 175955111}
+  startPanel: {fileID: 551242338}
   tip: {fileID: 1219459498}
   answerButtons: {fileID: 1139919672}
   finishChoice: {fileID: 159326131}
@@ -12922,7 +13003,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: f0540b20-dfd6-420e-b20d-c270f88dc77e
-  instanceId: 67ae0bf3-c4d8-4844-9d1d-0965a0c18b2a
+  instanceId: f683c0cb-0169-4c17-bfa8-e4b0418f5fc6
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -13134,7 +13215,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: 8b26b298-7bf4-490e-b245-a039c0184303
-  instanceId: dfe05c4c-8667-4369-a062-b134ac643840
+  instanceId: c80c3936-036f-48f3-85d7-baa6b5038dd3
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -13889,7 +13970,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: f547fe18-d477-46ec-bdf5-7208df19cb98
-  instanceId: 3794999e-829f-484e-8894-6aace6f5df1e
+  instanceId: eabf1e1a-4607-44b6-a188-1c62a0040674
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -17837,7 +17918,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 4fa827aa-fe49-4acf-85f2-7e0db1cc1017
+  instanceId: 81ab36d8-8353-4a86-b51a-ed8c4b9aef8f
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -19178,7 +19259,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: c5d9eccc-6335-4f9e-bcfa-0cdf2bb74404
+  instanceId: 2a4f1d1e-7cec-4acb-bb97-ee4de2cb01fc
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 

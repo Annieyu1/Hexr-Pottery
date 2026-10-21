@@ -20,6 +20,8 @@
 
 ## 2. 共用部分
 
+- **场景**（2026-10-21）：T2 以 `Assets/Scenes/Pressure_Demo_Room.unity` 为模板重建，用的是 Blender 书房（`HexR_StudyRoom.fbx`）和它已经烘焙好的灯光（光照数据与 Pressure_Demo_Room 共用，不需要重新烘焙；琴和 UI 靠光照探针）。模板里压力演示的物体（`Game`、`Object_L/R`、`Pedestal_L/R`、`ControlPanel` 等）和旧的 `Environment` 都关掉了；书房桌上挡琴的 `Mug`、`Book_Stack` 也关掉；琴放在书桌中间偏患侧 12 cm，小猫在桌子后沿。其他任务（T1/T5/T11）仍用 `Assets/Scenes/1.unity`。
+
 - **患者自己的手**：用 Quest 手部追踪（`TrackedHandFrame`），不再有固定的虚拟手。编辑器里没有追踪时，用灰色替身手，键盘 **1–5** = 拇指…小指按下。
 - **校准**（每次 Start，第一次或按了 Recalibrate 时）：
   1. "Rest your hand on the table"：手放松平放，静止 3 s → 记下每根手指的静息姿势；**移动 VR 相机架，让真实桌面对上虚拟书桌**（±0.3 m 以内）；**琴键移到指尖下面**：琴垂直于手指方向，按患者的指距排开（详见 `art/t2-piano.md` §5）。

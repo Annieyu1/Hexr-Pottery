@@ -60,6 +60,7 @@ namespace HexRMeta.Learning
 
         public TaskState State { get; private set; } = TaskState.Idle;
         public AssistLevel Assist => assist;
+        public HandSide AffectedHand => hand;
         public bool SoundOn => assist != AssistLevel.TouchOnly;
         protected abstract string TaskName { get; }
 

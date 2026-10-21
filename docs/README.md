@@ -20,6 +20,7 @@
 | [10-two-phase-sensory-reeducation.md](10-two-phase-sensory-reeducation.md) | **两阶段方案**:学习(日常任务中的被动触觉体验)+ 判断(辨别训练);中风 + SCI;文献已逐条核对 | 草案 v0.1,待商议 Q1–Q9 |
 | [11-learning-t1-t2.md](11-learning-t1-t2.md) | **学习阶段 T1 牵手 / T2 弹琴 / T5 吃饭 / T11 拧瓶盖**:场景、运行、参数、换 Blender 模型、数据 | 白模可运行,未上真机 |
 | [12-t2-piano-three-levels.md](12-t2-piano-three-levels.md) | **T2 弹琴三个层次**:L1 感受 / L2 学弹(逐级提示)/ L3 测试;校准、按键检测、提示、数据 | 可编译,未上真机 |
+| [13-t2-menu.md](13-t2-menu.md) | **T2 菜单**：暖色、小动画；标题 → 选层次 → 选曲 → 演奏 → 完成，治疗师设置在齿轮后（Figma "T2 Piano Menu"） | 可编译，编辑器看过标题页 |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | **未决问题清单**(按"向谁确认"分类) | 持续更新 |
 | [FUTURE_WORK.md](FUTURE_WORK.md) | 后续工作:咨询治疗师、文献阅读、自适应分级等 | 持续更新 |
 

@@ -15,9 +15,21 @@ namespace HexRMeta.Learning.EditorTools
         private const string T2Dir = "Assets/Art/Props/T2";
         private const string KeyboardModelPath = T2Dir + "/T2_Keyboard.fbx";
         private const float KeyboardDepth = 0.012f;    // model case bottom below the key tops
+        // T2 is built from the study-room scene: the Blender room (HexR_StudyRoom.fbx) with its baked
+        // lighting. Its pressure-demo game objects are switched off.
+        private const string StudyRoomTemplate = "Assets/Scenes/Pressure_Demo_Room.unity";
+        private static readonly string[] PressureDemoObjects =
+        {
+            "Game", "Object_L", "Object_R", "Pedestal_L", "Pedestal_R", "StrongerZone", "HintRoot", "HintText",
+            "ControlPanel", "FeedbackPresenter", "GameController", "Environment",
+        };
+        // room props that would sit on or right next to the keyboard
+        private static readonly string[] RoomPropsInTheWay = { "Mug", "Book_Stack" };
 
         private static void BuildPiano(Transform root)
         {
+            ClearStudyRoom(root.gameObject.scene);
+            SingleCamera(root.gameObject.scene);
             HapticPlayer player = MakePlayer(root);
             var taskGo = new GameObject("PianoTask");
             taskGo.transform.SetParent(root, false);
@@ -87,9 +99,14 @@ namespace HexRMeta.Learning.EditorTools
             cardTitle.fontSizeMax = cardTitle.fontSize;
             cardTitle.fontSizeMin = cardTitle.fontSize * 0.6f;
             cardTitle.textWrappingMode = TextWrappingModes.NoWrap;
-            // Skip step = move on from the current note (L2 / L3)
+            // Menu (docs/13, Figma "T2 Piano Menu") instead of the old rows of therapist buttons: the shared
+            // controls are replaced by warm Pause / Skip pills, settings live behind the gear.
             Common(root, task, player, null, new GameObject[0], new ChannelHighlights[0], true, task.OnSkip);
-            MakePianoPanel(root, task);
+            T2PlayControls(root, task);
+            WarmStepCard(card);
+            MakeT2Menu(root, task, keyboard);
+            ScreenFade screenFade = MakeScreenFade(root.gameObject.scene);
+            if (screenFade != null) Set(task, "fade", screenFade);
 
             // L3 rating (Perfect / Very good / Nice / Miss), above the keys; moves with the keyboard
             TMP_Text rating = Label("RatingText", keyboard.transform, new Vector3(0f, 0.09f, 0.10f), "Perfect!", 72f, true,
@@ -105,6 +122,14 @@ namespace HexRMeta.Learning.EditorTools
             Set(task, "card", card);
             Set(task, "ratingText", rating);
 
+            // ghost hand: where the hand rests on the keys (shown while placing it, and when it wanders off)
+            Material ghostMat = GhostMat("T2_GhostHand", new Color(0.25f, 0.76f, 0.79f, 0.35f));
+            StylizedHand ghost = MakeModelHand("GhostHand", root, anchor, faceUser, ghostMat)
+                                 ?? MakeHand("GhostHand", root, DefaultHand, anchor, faceUser, 1f, ghostMat);
+            ghost.SetCurlAllImmediate(0.25f);
+            ghost.gameObject.SetActive(false);
+            Set(task, "ghostHand", ghost);
+
             // the real table is lined up with the virtual desk by moving the rig (PianoTask.AlignRigToDesk)
             GameObject rig = Find(root.gameObject.scene, "OVRCameraRig");
             if (rig != null) Set(task, "rig", rig.transform);
@@ -113,9 +138,49 @@ namespace HexRMeta.Learning.EditorTools
             so.FindProperty("keyboardDepth").floatValue = KeyboardDepth;
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            // desk props beside the keyboard (they stay put; the keyboard follows the hand)
-            PlaceProp(root, T2Dir + "/T2_MusicBooks.fbx", anchor - rgt * 0.56f + fwd * 0.36f);   // back left, behind the settings panel
-            PlaceProp(root, T2Dir + "/T2_CatFigurine.fbx", anchor + rgt * 0.40f + fwd * 0.20f);
+            // the study room has its own book stack and lamp; only the cat is added, at the back of the desk
+            // behind the keyboard's left half (the desk lamp is further left, the pen holder on the right)
+            GameObject roomDesk = GameObject.Find("HexR_StudyRoom/Desk");
+            Vector3 catPos = anchor - rgt * 0.23f + fwd * 0.30f;
+            if (roomDesk != null)
+            {
+                Bounds db = roomDesk.GetComponent<Renderer>().bounds;
+                float back = Vector3.Dot(db.center - anchor, fwd) + Mathf.Abs(db.extents.x * fwd.x) + Mathf.Abs(db.extents.z * fwd.z);
+                catPos = anchor - rgt * 0.23f + fwd * (back - 0.07f);
+            }
+            PlaceProp(root, T2Dir + "/T2_CatFigurine.fbx", catPos);
+        }
+
+        /// <summary>
+        /// Exactly one active camera: the rig's CenterEyeAnchor. Any other camera in the scene (the rig's
+        /// left / right eye anchors, cameras left in the template) is disabled and loses the MainCamera tag.
+        /// </summary>
+        private static void SingleCamera(UnityEngine.SceneManagement.Scene scene)
+        {
+            GameObject eye = Find(scene, "CenterEyeAnchor");
+            foreach (GameObject go in scene.GetRootGameObjects())
+                foreach (Camera c in go.GetComponentsInChildren<Camera>(true))
+                {
+                    bool keep = eye != null && c.gameObject == eye;
+                    c.enabled = keep;
+                    if (keep) c.tag = "MainCamera";
+                    else if (c.CompareTag("MainCamera")) c.tag = "Untagged";
+                    EditorUtility.SetDirty(c);
+                }
+        }
+
+        /// <summary>Study-room template: pressure-demo objects off, room props in the keyboard's way off.</summary>
+        private static void ClearStudyRoom(UnityEngine.SceneManagement.Scene scene)
+        {
+            foreach (GameObject go in scene.GetRootGameObjects())
+                if (System.Array.IndexOf(PressureDemoObjects, go.name) >= 0) go.SetActive(false);
+            GameObject room = Find(scene, "HexR_StudyRoom");
+            if (room == null) return;
+            foreach (string n in RoomPropsInTheWay)
+            {
+                Transform t = room.transform.Find(n);
+                if (t != null) t.gameObject.SetActive(false);
+            }
         }
 
         private static void PlaceProp(Transform root, string path, Vector3 pos)
@@ -224,53 +289,6 @@ namespace HexRMeta.Learning.EditorTools
             so.FindProperty("pressDegrees").floatValue = 3f;
             so.ApplyModifiedPropertiesWithoutUndo();
             return true;
-        }
-
-        /// <summary>
-        /// Therapist settings under the Start / Pause row: level, the three cues, touch strength,
-        /// tempo, song, recalibrate, plus a text line with the current settings and the last test.
-        /// </summary>
-        private static void MakePianoPanel(Transform root, PianoTask task)
-        {
-            Vector3 c = anchor - rgt * (0.48f * sideSign) + fwd * 0.05f + Vector3.up * 0.3f;
-            var panel = new GameObject("PianoSettings").transform;
-            panel.SetParent(root.Find("Controls") ?? root, false);
-            Color teal = StepCard.Teal, title = StepCard.Title;
-            Pill Btn(string label, float w, UnityEngine.Events.UnityAction<Oculus.Interaction.PointerEvent> act, bool outline = false) =>
-                new Pill { label = label, widthPx = w, fill = outline ? White : ButtonGrey, ring = outline ? teal : (Color?)null, text = title, act = act };
-
-            Transform levels = Group("Levels", panel).transform;
-            Row(levels, c - Vector3.up * 0.055f,
-                Btn("L1 Listen", 120f, task.OnLevel1, true), Btn("L2 Learn", 120f, task.OnLevel2, true), Btn("L3 Test", 120f, task.OnLevel3, true));
-            Transform cues = Group("Cues", panel).transform;
-            Row(cues, c - Vector3.up * 0.105f,
-                Btn("Sound on", 120f, task.OnToggleSound), Btn("Visual on", 120f, task.OnToggleVisual), Btn("Touch on", 120f, task.OnToggleTouch));
-            Transform strength = Group("Strength", panel).transform;
-            Row(strength, c - Vector3.up * 0.155f,
-                Btn("Touch -", 100f, task.OnStrengthDown), Btn("Touch +", 100f, task.OnStrengthUp),
-                Btn("Slower", 100f, task.OnSlower), Btn("Faster", 100f, task.OnFaster));
-            Transform song = Group("Song", panel).transform;
-            Row(song, c - Vector3.up * 0.205f, Btn("Next song", 130f, task.OnNextSong), Btn("Recalibrate", 130f, task.OnRecalibrate));
-
-            TMP_Text info = Text("SettingsText", panel, c + Vector3.up * 0.23f, "", 0.11f, 0.6f);
-            Set(task, "settingsText", info);
-            Set(task, "levelLabels", new Object[]
-            {
-                ButtonLabel(levels, "L1 Listen"), ButtonLabel(levels, "L2 Learn"), ButtonLabel(levels, "L3 Test"),
-            });
-            Set(task, "soundLabel", ButtonLabel(cues, "Sound on"));
-            Set(task, "visualLabel", ButtonLabel(cues, "Visual on"));
-            Set(task, "touchLabel", ButtonLabel(cues, "Touch on"));
-        }
-
-        /// <summary>The visible label of a styled button made by Row().</summary>
-        private static TMP_Text ButtonLabel(Transform group, string label)
-        {
-            Transform b = group.Find("Button_" + label);
-            if (b == null) return null;
-            foreach (TMP_Text t in b.GetComponentsInChildren<TMP_Text>(true))
-                if (t.name == "Label" && t.gameObject.activeSelf) return t;
-            return null;
         }
     }
 }

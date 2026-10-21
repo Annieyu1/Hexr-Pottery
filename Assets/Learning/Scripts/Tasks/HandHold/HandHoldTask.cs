@@ -115,6 +115,8 @@ namespace HexRMeta.Learning
 
         [Header("T1 UI")]
         [SerializeField] private StepCard card;
+        [Tooltip("Start screen with the handshake animation, shown instead of the step card while idle.")]
+        [SerializeField] private T1StartPanel startPanel;
         [SerializeField] private TipCard tip;
         [Tooltip("Number buttons 2 / 3 / 4 + Feel again.")]
         [SerializeField] private GameObject answerButtons;
@@ -171,6 +173,15 @@ namespace HexRMeta.Learning
             ApplyOfferPose();
             ResetScene();
             ShowCard(ChipName, "Ready", "Press Start to begin", 0, CardTone.Normal);
+            ShowStartPanel(true);
+        }
+
+        /// <summary>Idle: the start screen replaces the step card; once started, the card is back.</summary>
+        private void ShowStartPanel(bool on)
+        {
+            if (startPanel == null) return;
+            startPanel.Show(on);
+            if (card != null) card.gameObject.SetActive(!on);
         }
 
         private void ResetScene()
@@ -199,6 +210,7 @@ namespace HexRMeta.Learning
 
         protected override IEnumerator Intro()
         {
+            ShowStartPanel(false);
             ResetScene();
             releaseCount = tipCount = quizTrials = quizCorrect = 0;
             bag.Clear();
