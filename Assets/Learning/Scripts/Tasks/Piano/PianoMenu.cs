@@ -442,7 +442,7 @@ namespace HexRMeta.Learning
             Set(resultTitle, r.level == PianoLevel.Listen ? "Well done!" : "Congratulations!");
             Set(resultSub, (r.level == PianoLevel.Listen ? "You listened to " : "You played ") + r.song);
             Set(accValue, scored ? Mathf.RoundToInt(r.accuracy * 100f) + "%" : r.notes.ToString());
-            Set(accLabel, scored ? "accuracy" : "notes felt");
+            Set(accLabel, !scored ? "notes felt" : r.level == PianoLevel.Test ? "notes played" : "accuracy");
             int secs = Mathf.RoundToInt(r.seconds);
             Set(timeValue, secs / 60 + ":" + (secs % 60).ToString("00"));
             int earned = !scored ? 3 : r.accuracy >= 0.9f ? 3 : r.accuracy >= 0.75f ? 2 : r.accuracy >= 0.5f ? 1 : 0;

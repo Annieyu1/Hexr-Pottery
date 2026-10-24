@@ -16,16 +16,22 @@ namespace HexRMeta.Learning
         public string song = "";
         public string cues = "";
         public int stageAtResponse = -1; // unused since 2026-10-21 (L2 cues no longer come in steps)
-        public bool firstPressDecides;  // L3: the first press is the answer (no waiting for the right key)
+        public bool strayIgnored;       // L3 (2026-10-25): other fingers do not answer; only a timeout is a Miss
 
         public int firstKey = -1;
         public float firstTime = -1f;
         public PressInfo firstInfo;
-        public int wrongPresses;
+        public PressInfo targetInfo;    // first press of a target finger (individuation)
+        public int rawFirstKey = -1;    // first press by the uncorrected judgment (docs/16 §2)
+        public string suppressed = "";  // fingers whose landing did not count (another landed higher)
+        public int wrongPresses;        // L2: wrong keys; L3: stray presses by other fingers
+        public int wholeHandPresses;    // L3: three or more fingers lifted together (no hit, no error)
+        public string strayFingers = "";
+        public float hitTime = -1f;     // L3: the target finger pressed
         public int hits;                // distinct target keys pressed
         private int hitMask;
-        public bool answered;           // L3: has an answer; L2: the right key(s) were pressed
-        public bool correct;
+        public bool answered;           // the right key(s) were pressed
+        public bool correct;            // right first time (no other finger before it)
         public bool omitted;
         public bool skipped;            // Skip button
         public string rating = "";     // L3: Perfect / Very good / Nice / Miss
@@ -35,26 +41,29 @@ namespace HexRMeta.Learning
         public bool Register(int key, PressInfo info, float t, int stage)
         {
             if (answered) return true;
+            if (strayIgnored && info != null && info.wholeHand) { wholeHandPresses++; return false; }
             if (firstKey < 0) { firstKey = key; firstTime = t; firstInfo = info; stageAtResponse = stage; }
             bool isTarget = Array.IndexOf(targets, key) >= 0;
             if (isTarget)
             {
+                if (targetInfo == null) targetInfo = info;
                 if ((hitMask & (1 << key)) == 0) { hitMask |= 1 << key; hits++; }
             }
-            else wrongPresses++;
-
-            if (firstPressDecides)
+            else
             {
-                if (!isTarget || hits >= targets.Length)
+                wrongPresses++;
+                if (strayIgnored && info != null)
                 {
-                    answered = true;
-                    correct = isTarget && wrongPresses == 0;
+                    string name = ((HandFinger)info.finger).ToString();
+                    strayFingers = strayFingers.Length == 0 ? name : strayFingers + "+" + name;
                 }
             }
-            else if (hits >= targets.Length)
+
+            if (hits >= targets.Length)
             {
                 answered = true;
-                correct = wrongPresses == 0;   // right first time
+                hitTime = t;
+                correct = wrongPresses == 0 && wholeHandPresses == 0;   // right first time
             }
             return answered;
         }
@@ -79,6 +88,8 @@ namespace HexRMeta.Learning
         public float key_spacing_mm;
         public string keyboard_position;
         public float desk_shift_mm;     // VR rig moved up (+) / down (-) to line the real table up with the virtual desk
+        // 5×5, row = finger lifted fully, column = how far that drags each finger (fraction of its own lift)
+        public float[] coupling = new float[25];
     }
 
     [Serializable]
@@ -90,9 +101,13 @@ namespace HexRMeta.Learning
         public string timing;
         public float tempo;
         public int notes;
-        public int correct;
+        public int correct;             // right first time (no other finger before the target)
         public int omitted;
-        public float accuracy;
+        public float accuracy;          // right first time / notes (therapist only)
+        public int hits;                // target finger pressed before the timeout
+        public float completion;        // hits / notes (shown to the patient)
+        public int stray_presses;       // other fingers that pressed while a note waited
+        public int whole_hand;          // three or more fingers together (ignored)
         public float mean_reaction_s;
         public float mean_abs_timing_error_s;
         public float play_seconds;      // first cue to the end of the last note
@@ -115,7 +130,9 @@ namespace HexRMeta.Learning
         public const string TrialsHeader =
             "session_id,level,song,round,note_index,target_keys,target_fingers,cues,timing,tempo,rating," +
             "onset_s,response_s,reaction_s,timing_error_s,response_key,response_finger,correct,wrong_presses,omitted,skipped," +
-            "co_active,peak_progress,peak_lift_mm,peak_flex_deg,land_speed_mm_s,lift_start_s,lift_reaction_s,lift_s,glove_connected";
+            "co_active,peak_progress,peak_lift_mm,peak_flex_deg,land_speed_mm_s,lift_start_s,lift_reaction_s,lift_s,glove_connected," +
+            "raw_response_finger,suppressed,other_peak_thumb,other_peak_index,other_peak_middle,other_peak_ring,other_peak_little,individuation," +
+            "hit,hit_s,stray_fingers,whole_hand";
 
         private readonly string folder;
         private readonly string sessionId;
@@ -178,7 +195,19 @@ namespace HexRMeta.Learning
               .Append(p != null ? p.liftStart.ToString("0.000", C) : "").Append(',')
               .Append(p != null ? (p.liftStart - n.onset).ToString("0.000", C) : "").Append(',')
               .Append(p != null && p.Done ? p.Seconds.ToString("0.000", C) : "").Append(',')
-              .Append(glove ? 1 : 0);
+              .Append(glove ? 1 : 0).Append(',')
+              .Append(n.rawFirstKey >= 0 ? ((HandFinger)fingerFor(n.rawFirstKey)).ToString() : "").Append(',')
+              .Append(Clean(n.suppressed));
+            // the other fingers while the target finger pressed, coupling not subtracted
+            PressInfo ti = n.targetInfo;
+            for (int f = 0; f < 5; f++)
+                sb.Append(',').Append(ti != null && f != ti.finger ? ti.otherPeak[f].ToString("0.00", C) : "");
+            sb.Append(',').Append(ti != null ? ti.Individuation.ToString("0.00", C) : "");
+            bool hit = n.hitTime >= 0f;
+            sb.Append(',').Append(hit ? 1 : 0)
+              .Append(',').Append(hit ? (n.hitTime - n.onset).ToString("0.000", C) : "")
+              .Append(',').Append(Clean(n.strayFingers))
+              .Append(',').Append(n.wholeHandPresses.ToString(C));
             trials.WriteLine(sb.ToString());
             trials.Flush();
         }

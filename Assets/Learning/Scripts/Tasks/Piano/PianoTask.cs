@@ -18,8 +18,8 @@ namespace HexRMeta.Learning
         public PianoLevel level;
         public string song = "";
         public int notes;
-        public int correct;            // right first time (L2, L3)
-        public float accuracy = -1f;   // 0..1, -1 = not scored (L1)
+        public int correct;            // L2: right first time; L3: notes played before the timeout
+        public float accuracy = -1f;   // 0..1, -1 = not scored (L1); L3 = completion
         public float seconds;          // first note to the end of the song
         public bool completed;         // false = ended early (End button, scene closed)
     }
@@ -224,6 +224,8 @@ namespace HexRMeta.Learning
                 detector.Clock = () => clock;
                 detector.Pressed += OnFingerPressed;
                 detector.Released += OnFingerReleased;
+                detector.Suppressed += OnFingerSuppressed;
+                detector.RawPressed += OnRawPressed;
             }
             ShowLabels(SelectedSong);
             card?.Show("T2 Piano", "Press Start", LevelName(level), 0, CardTone.Normal);
@@ -401,6 +403,7 @@ namespace HexRMeta.Learning
                 fingerGlow?.Set(f, true);
                 TouchCue(ChannelFor(f), "CAL_" + (HandFinger)f);
                 Vector3 best = restPose[f];
+                var bestAll = (Vector3[])restPose.Clone();   // every finger at that moment (coupling)
                 float bestDist = 0f, t = 0f;
                 while (t < fingerSeconds)
                 {
@@ -410,16 +413,23 @@ namespace HexRMeta.Learning
                     if (!detector.Tracked) continue;
                     Vector3 pose = detector.Pose(f);
                     float d = (pose - restPose[f]).magnitude;
-                    if (d > bestDist) { bestDist = d; best = pose; }
+                    if (d > bestDist)
+                    {
+                        bestDist = d;
+                        best = pose;
+                        for (int o = 0; o < 5; o++) bestAll[o] = detector.Pose(o);
+                    }
                     if (t > 1f && bestDist > 0.015f && d < 0.4f * bestDist) break;   // lifted and put down again
                 }
                 detector.SetPress(f, best);
+                detector.SetCouplingSample(f, bestAll);
                 keyboard?.SetLit(key, false);
                 fingerGlow?.Set(f, false);
                 if (log != null) log.Trial("calibrate_" + (HandFinger)f, -1, "", -1, -1, -1f,
                                            "range_mm=" + (bestDist * 1000f).ToString("0.0") + (detector.Usable(f) ? "" : " not_usable"));
                 yield return Wait(0.5f);
             }
+            detector.FinishCalibration();
             WriteCalibration(false);
             card?.Show("Get ready", "Ready", "", 5, CardTone.Done);
             yield return Wait(1f);
@@ -474,6 +484,8 @@ namespace HexRMeta.Learning
                 c.keyboard_position = PianoLog.Mm(keyboard.transform.position);
             }
             c.desk_shift_mm = deskShift * 1000f;
+            for (int i = 0; i < 5; i++)
+                for (int o = 0; o < 5; o++) c.coupling[i * 5 + o] = detector.Coupling(i, o);
             pianoLog.WriteJson("calibration.json", c);
         }
 
@@ -552,6 +564,7 @@ namespace HexRMeta.Learning
         {
             var n = new PianoNoteTrial { index = noteIndex, targets = note.keys, onset = clock, cues = CueTag };
             waiting = n;
+            detector?.SetExpected(FingerMask(note.keys), true);
             skipRequested = false;
             tryAgainUntil = -1f;
             if (runStart < 0f) runStart = clock;
@@ -578,6 +591,7 @@ namespace HexRMeta.Learning
                 yield return null;
             }
             waiting = null;
+            detector?.ClearExpected();
             skipRequested = false;
             ClearCues(note.keys);
             Close(n);
@@ -624,9 +638,10 @@ namespace HexRMeta.Learning
                     Step(song.title + "#" + noteIndex);
                     var n = new PianoNoteTrial
                     {
-                        index = noteIndex, targets = notes[i].keys, onset = clock, cues = CueTag, firstPressDecides = true,
+                        index = noteIndex, targets = notes[i].keys, onset = clock, cues = CueTag, strayIgnored = true,
                     };
                     waiting = n;
+                    detector?.SetExpected(FingerMask(n.targets), false);
                     skipRequested = false;
                     if (testStart < 0f) testStart = clock;
                     foreach (Cue c in CueOrder()) FireCue(c, n.targets);
@@ -634,6 +649,7 @@ namespace HexRMeta.Learning
                     if (!n.answered) { n.omitted = true; n.skipped = skipRequested; }
                     skipRequested = false;
                     waiting = null;
+                    detector?.ClearExpected();
                     ClearCues(n.targets);
                     Rate(n);
                     Close(n);
@@ -663,12 +679,13 @@ namespace HexRMeta.Learning
                         float half = Mathf.Max(0.3f, duration * 0.5f);
                         var n = new PianoNoteTrial
                         {
-                            index = noteIndex, targets = notes[i].keys, onset = clock, cues = CueTag, firstPressDecides = true,
+                            index = noteIndex, targets = notes[i].keys, onset = clock, cues = CueTag, strayIgnored = true,
                             windowStart = clock - prevHalf, windowEnd = clock + half,
                         };
                         prevHalf = half;
                         tempoNotes.Add(n);
                         testTrials.Add(n);
+                        detector?.SetExpected(FingerMask(n.targets), false);
                         foreach (Cue c in CueOrder()) FireCue(c, n.targets);
                         float lit = Mathf.Min(duration * 0.8f, 0.6f);
                         yield return Wait(lit);
@@ -680,6 +697,7 @@ namespace HexRMeta.Learning
                 }
                 yield return Wait(prevHalf);
                 CloseExpiredTempoNotes(true);
+                detector?.ClearExpected();
             }
             inSong = false;
             float playSeconds = testStart >= 0f ? clock - testStart : 0f;
@@ -693,9 +711,9 @@ namespace HexRMeta.Learning
             {
                 int seconds = Mathf.RoundToInt(playSeconds);
                 int acc = 0, n = 0;
-                foreach (PianoNoteTrial t in testTrials) { n++; if (t.correct) acc++; }
+                foreach (PianoNoteTrial t in testTrials) { n++; if (t.hitTime >= 0f) acc++; }
                 card?.Show(LevelName(PianoLevel.Test), "Congratulations!",
-                           "Accuracy " + (n > 0 ? Mathf.RoundToInt(100f * acc / n) : 0) + "%  ·  Time " + seconds / 60 + ":" + (seconds % 60).ToString("00"),
+                           "Played " + (n > 0 ? Mathf.RoundToInt(100f * acc / n) : 0) + "%  ·  Time " + seconds / 60 + ":" + (seconds % 60).ToString("00"),
                            5, CardTone.Done);
                 yield return Wait(4f);
             }
@@ -731,6 +749,9 @@ namespace HexRMeta.Learning
                 s.notes++;
                 if (n.correct) s.correct++;
                 if (n.omitted) s.omitted++;
+                if (n.hitTime >= 0f) s.hits++;
+                s.stray_presses += n.wrongPresses;
+                s.whole_hand += n.wholeHandPresses;
                 switch (n.rating)
                 {
                     case "Perfect": s.perfect++; break;
@@ -744,33 +765,42 @@ namespace HexRMeta.Learning
                 if (n.firstKey >= 0)
                 {
                     s.confusion[tf * 5 + FingerFor(n.firstKey)]++;
-                    if (testTiming == TestTiming.Wait && n.correct) { rtSum += n.firstTime - n.onset; rtN++; }
-                    if (testTiming == TestTiming.Tempo) { errSum += Mathf.Abs(n.firstTime - n.onset); errN++; }
+                }
+                if (n.hitTime >= 0f)
+                {
+                    if (testTiming == TestTiming.Wait) { rtSum += n.hitTime - n.onset; rtN++; }
+                    else { errSum += Mathf.Abs(n.hitTime - n.onset); errN++; }
                 }
             }
             s.accuracy = s.notes > 0 ? s.correct / (float)s.notes : 0f;
+            s.completion = s.notes > 0 ? s.hits / (float)s.notes : 0f;
             s.mean_reaction_s = rtN > 0 ? rtSum / rtN : -1f;
             s.mean_abs_timing_error_s = errN > 0 ? errSum / errN : -1f;
             pianoLog?.WriteJson("test_summary.json", s);
-            Debug.Log("[Learning] T2 test: " + s.correct + "/" + s.notes + " correct, " + playSeconds.ToString("0.0") + " s, " +
+            Debug.Log("[Learning] T2 test: " + s.hits + "/" + s.notes + " played, " + s.correct + " right first time, " + playSeconds.ToString("0.0") + " s, " +
                       "perfect " + s.perfect + ", very good " + s.very_good + ", nice " + s.nice + ", miss " + s.miss);
             return s;
         }
 
         // ------------------------------------------------------------------ L3 rating
 
-        /// <summary>Perfect / Very good / Nice for a right first press (by reaction time or timing), else Miss.</summary>
+        /// <summary>
+        /// Perfect / Very good / Nice once the target finger pressed (by reaction time or timing); one
+        /// step lower if another finger pressed first. Miss only when the note timed out (docs/16 §2.1).
+        /// </summary>
         private void Rate(PianoNoteTrial n)
         {
             if (n.rating.Length > 0) return;
-            if (!n.correct || n.firstKey < 0) n.rating = "Miss";
+            if (n.hitTime < 0f) n.rating = "Miss";
             else
             {
                 bool tempoMode = !float.IsInfinity(n.windowStart);
-                float t = tempoMode ? Mathf.Abs(n.firstTime - n.onset) : n.firstTime - n.onset;
+                float t = tempoMode ? Mathf.Abs(n.hitTime - n.onset) : n.hitTime - n.onset;
                 float perfect = tempoMode ? perfectTiming : perfectSeconds;
                 float good = tempoMode ? veryGoodTiming : veryGoodSeconds;
-                n.rating = t <= perfect ? "Perfect" : t <= good ? "Very good" : "Nice";
+                int tier = t <= perfect ? 0 : t <= good ? 1 : 2;
+                if (n.wrongPresses > 0 || n.wholeHandPresses > 0) tier = Mathf.Min(2, tier + 1);
+                n.rating = tier == 0 ? "Perfect" : tier == 1 ? "Very good" : "Nice";
             }
             ShowRating(n.rating);
         }
@@ -817,16 +847,16 @@ namespace HexRMeta.Learning
             if (waiting != null)
             {
                 PianoNoteTrial w = waiting;
-                w.Register(key, info, clock, -1);
+                w.Register(key, info, info.start, -1);
                 if (level == PianoLevel.Learn && System.Array.IndexOf(w.targets, key) < 0) TryAgain(w);
                 return;
             }
             if (level == PianoLevel.Test && testTiming == TestTiming.Tempo)
             {
                 foreach (PianoNoteTrial n in tempoNotes)
-                    if (!n.answered && clock >= n.windowStart && clock <= n.windowEnd)
+                    if (!n.answered && info.start >= n.windowStart && info.start <= n.windowEnd)
                     {
-                        if (n.Register(key, info, clock, -1)) Rate(n);
+                        if (n.Register(key, info, info.start, -1)) Rate(n);
                         return;
                     }
             }
@@ -834,6 +864,41 @@ namespace HexRMeta.Learning
         }
 
         private void OnFingerReleased(int finger, PressInfo info) { }
+
+        /// <summary>The note a press at time t belongs to (L2 / L3 wait: the one asked; L3 tempo: its window).</summary>
+        private PianoNoteTrial NoteAt(float t)
+        {
+            if (waiting != null) return waiting;
+            if (level == PianoLevel.Test && testTiming == TestTiming.Tempo)
+                foreach (PianoNoteTrial n in tempoNotes)
+                    if (!n.answered && t >= n.windowStart && t <= n.windowEnd) return n;
+            return null;
+        }
+
+        /// <summary>A landing that did not count (another finger landed with a higher lift).</summary>
+        private void OnFingerSuppressed(int finger, PressInfo info)
+        {
+            if (State != TaskState.Running || level == PianoLevel.Listen) return;
+            PianoNoteTrial n = NoteAt(info.start);
+            if (n == null) return;
+            string name = ((HandFinger)finger).ToString();
+            n.suppressed = n.suppressed.Length == 0 ? name : n.suppressed + "+" + name;
+        }
+
+        /// <summary>The uncorrected judgment, for the log only (raw_response_finger).</summary>
+        private void OnRawPressed(int finger, float t)
+        {
+            if (State != TaskState.Running || level == PianoLevel.Listen) return;
+            PianoNoteTrial n = NoteAt(t);
+            if (n != null && n.rawFirstKey < 0) n.rawFirstKey = KeyFor(finger);
+        }
+
+        private int FingerMask(int[] keys)
+        {
+            int m = 0;
+            foreach (int k in keys) m |= 1 << FingerFor(k);
+            return m;
+        }
 
         /// <summary>Keys follow the patient's fingers (L2/L3) or the song (L1).</summary>
         private void UpdateKeysFromHand()
@@ -1149,7 +1214,7 @@ namespace HexRMeta.Learning
             var r = new PianoRunResult { level = level, song = current != null ? current.title : "", completed = EndReason == "completed" };
             if (level == PianoLevel.Test)
             {
-                foreach (PianoNoteTrial t in testTrials) { r.notes++; if (t.correct) r.correct++; }
+                foreach (PianoNoteTrial t in testTrials) { r.notes++; if (t.hitTime >= 0f) r.correct++; }
                 r.seconds = testPlaySeconds;
             }
             else

@@ -1,6 +1,6 @@
 # 16 T2 弹琴：按键判定、个人校准、桌面对齐
 
-版本：v0.1 · 2026-10-24 · 状态：**方案，代码未改**。现有的检测方式（抬起再落下、每指校准）见 docs/12 §2；本文件是在它上面的改进方案。
+版本：v0.2 · 2026-10-25 · 状态：**§2、§3 已实现**（编辑器里用脚本驱动检测器测过，未在头显、未在 Play 里整体跑过）；其余仍是方案。现有的检测方式（抬起再落下、每指校准）见 docs/12 §2；本文件是在它上面的改进方案。
 
 文献均已在 PubMed 核对（2026-10-23），只写摘要或全文里确实有的内容；只有摘要、没看到全文的细节标 `[全文待核]`。所有数字阈值都是起始值，要在头显上实测再调。
 
@@ -19,9 +19,9 @@
 
 L2 / L3 时任务知道当前该按哪根手指，告诉检测器（新增 `FingerPressDetector.SetExpected(finger)`）。三层处理：
 
-1. **扣掉联动**：校准时每根手指单独抬 3 次，同时记下其他手指被带着动了多少，得到 5×5 联动表 `E[i][o]`（i 抬满时 o 动了几成）。弹奏时，每根手指的进度先减去"被其他手指带出来的那部分"（`progress[o] − E[i][o] × progress[i]`，取最大的那根 i），再和门槛比较。
+1. **扣掉联动**：校准时每根手指单独抬 3 次，同时记下其他手指被带着动了多少，得到 5×5 联动表 `E[i][o]`（i 抬满时 o 动了几成）。弹奏时，每根手指的进度先减去"被其他手指带出来的那部分"（`progress[o] − E[i][o] × progress[i]`，取最大的那根 i），再和门槛比较。**只从比它抬得更高的手指扣**（2026-10-25）：否则被带起来的邻指会反过来把目标手指扣掉，目标手指按不出来。
 2. **非目标手指门槛更高**（只在 L2）：目标手指抬起门槛 0.4；其他手指 0.7，并且至少达到最小抬起高度的 2 倍。
-3. **只认主动的那根**：200 ms 内有两根手指落下，只算抬得最高的那根，另一根记进 `co_active`，不当作按错。
+3. **只认主动的那根**：200 ms 内有两根手指落下，只算抬得最高的那根，另一根记进 `suppressed`，不当作按错。一根手指落下时如果别的手指还抬着，先等它（最多 200 ms）；按键时间仍记落下的那一刻，不受等待影响。两根都是目标手指（和弦）时不比较。
 
 | | L2 学弹 | L3 测试 |
 |---|---|---|
@@ -29,6 +29,25 @@ L2 / L3 时任务知道当前该按哪根手指，告诉检测器（新增 `Fing
 | 非目标门槛提高 | 用（误判会弹出 "Try again"，让患者受挫） | **不用**（会让分数虚高） |
 | 只认主动的那根 | 用 | 用 |
 | 日志 | 同时记原始判定和最终判定 | 同时记原始判定和最终判定 |
+
+### 2.1 L3：其他手指触发不判 Miss（2026-10-25，已实现）
+
+参考音游：一首曲子里**只有超时没按才是 Miss**。患者看到的反馈只奖励"做到了"；误触照实记进日志，给治疗师看。不给患者看"一次按对率"，也不做这个开关（2026-10-25 决定）。
+
+依据（方向，不是具体数值）：任务难度要和本人能力匹配（挑战点理论，doi:10.3200/JMBR.36.2.212-224），所以难度靠曲目分级（§8），不在曲子里扣分施压；提高"我能做好"的预期有利于表现和学习（OPTIMAL 理论，doi:10.3758/s13423-015-0999-9），所以少让患者看到 Miss。
+
+| 情况 | 患者看到 | 记录 |
+|---|---|---|
+| 目标手指按下，之前没有别的手指 | Perfect / Very good / Nice（按反应时或节拍误差） | `hit=1`，`correct=1` |
+| 目标手指按下，但之前有别的手指触发 | 评级降一档（最低 Nice，不出现 Miss） | `hit=1`，`correct=0`，`stray_fingers` |
+| 只有别的手指触发 | 琴键照常发声；不显示错误，继续等 | 误触 +1，这个音不结束 |
+| 三根及以上手指一起抬起 | 不算命中，也不算错 | `whole_hand` +1（防止一起抬来"刷"命中） |
+| 10 s 内（Tempo：窗口内）目标手指没按 | Miss | `hit=0` |
+
+- 结束页显示**完成率**（`notes played`）和用时，星星按完成率给；不显示误触。
+- `test_summary.json`：`hits` / `completion`（完成率）、`correct` / `accuracy`（一次按对率，只给治疗师）、`stray_presses`、`whole_hand`；平均反应时按目标手指按下的时间算。
+- L2 不变：只有非目标手指明显抬起（≥ 0.7）才 "Try again"。
+- Play 里用脚本验证过（30 个音：直接按对 → Perfect；先按错 / 先误触 / 先整手 → 最后按到，Nice；故意不按的 1 个 → Miss；完成率 97%，一次按对率 27%）。
 
 ## 3. 联动作为手部恢复能力的评估指标
 
@@ -52,7 +71,7 @@ L3 每个音输出两类数据：
 | 弹对 / 评级（Perfect…Miss） | 用 §2 扣掉联动后的判定，只回答"按的是不是该按的那根" | 结束页、患者反馈 |
 | 独立性 | 按目标手指时，其他四根手指各自的最大进度（占它自己校准幅度的比例），**不扣联动** | 写进日志，治疗师看纵向变化 |
 
-- 新增日志列（`piano_trials.csv`）：`other_peak_thumb … other_peak_little`（目标手指那列留空）、`individuation = 1 − 四根非目标手指的平均峰值进度`。
+- 新增日志列（`piano_trials.csv`，2026-10-25 已实现）：`raw_response_finger`（不扣联动、基础门槛下的判定）、`suppressed`、`other_peak_thumb … other_peak_little`（按目标手指时其他手指的最大原始进度，目标手指那列留空）、`individuation = 1 − 四根非目标手指的平均峰值进度`（各自限制在 0–1）。
 - `individuation` 是**我们自己的定义**，手册和论文里要写明。文献里有个体化指数 / 静止指数（doi:10.1152/jn.00873.2005 两个都用），精确公式 `[全文待核]`，核对后再决定是否改成同一算法，方便和文献比较。
 - 联动表 `E` 存进 `calibration.json`，每次校准一份，可以看它随疗程的变化。
 - L3 用当天 L2 前的校准，测试中途不更新。
@@ -281,3 +300,5 @@ MRUK 205 的 `EnvironmentRaycastManager`（基于 Quest 3 深度）返回命中�
 16. Schneider S, Schönle PW, Altenmüller E, Münte TF. Using musical instruments to improve motor skill recovery following a stroke. J Neurol. 2007;254(10):1339-46. doi:10.1007/s00415-006-0523-2
 17. Villeneuve M, Penhune V, Lamontagne A. A piano training program to improve manual dexterity and upper extremity function in chronic stroke survivors. Front Hum Neurosci. 2014;8:662. doi:10.3389/fnhum.2014.00662
 18. Buchholz B, Armstrong TJ, Goldstein SA. Anthropometric data for describing the kinematics of the human hand. Ergonomics. 1992;35(3):261-73. doi:10.1080/00140139208967812
+19. Guadagnoli MA, Lee TD. Challenge point: a framework for conceptualizing the effects of various practice conditions in motor learning. J Mot Behav. 2004;36(2):212-24. doi:10.3200/JMBR.36.2.212-224
+20. Wulf G, Lewthwaite R. Optimizing performance through intrinsic motivation and attention for learning: the OPTIMAL theory of motor learning. Psychon Bull Rev. 2016;23(5):1382-1414. doi:10.3758/s13423-015-0999-9
