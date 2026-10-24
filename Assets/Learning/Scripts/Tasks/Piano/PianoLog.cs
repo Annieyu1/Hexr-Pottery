@@ -256,13 +256,15 @@ namespace HexRMeta.Learning
                 flex = new StreamWriter(Path.Combine(folder, "flex.csv"), false, new UTF8Encoding(false));
                 flex.WriteLine("t_s,level,note_index,tracked," +
                                "progress_thumb,progress_index,progress_middle,progress_ring,progress_little," +
-                               "flex_thumb,flex_index,flex_middle,flex_ring,flex_little");
+                               "flex_thumb,flex_index,flex_middle,flex_ring,flex_little," +
+                               "reliable_thumb,reliable_index,reliable_middle,reliable_ring,reliable_little");
             }
             var sb = new StringBuilder();
             sb.Append(t.ToString("0.000", C)).Append(',').Append(level).Append(',')
               .Append(noteIndex.ToString(C)).Append(',').Append(tracked ? 1 : 0);
             for (int f = 0; f < 5; f++) sb.Append(',').Append(d.Progress(f).ToString("0.00", C));
             for (int f = 0; f < 5; f++) sb.Append(',').Append(tracked ? d.FlexDegrees(f).ToString("0.0", C) : "");
+            for (int f = 0; f < 5; f++) sb.Append(',').Append(d.Reliable(f) ? 1 : 0);
             flex.WriteLine(sb.ToString());
         }
 

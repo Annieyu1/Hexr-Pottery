@@ -138,6 +138,16 @@ namespace HexRMeta.Learning
             return knuckles[finger] != null ? knuckles[finger].position : Palm;
         }
 
+        /// <summary>
+        /// Quest's own per-finger confidence is High (thumb..little). Always true for the stand-in hand
+        /// or without an OVRHand. Low usually means the finger is hidden behind the others.
+        /// </summary>
+        public bool FingerReliable(int finger)
+        {
+            if (UsingStandIn || ovrHand == null) return true;
+            return ovrHand.GetFingerConfidence((OVRHand.HandFinger)finger) == OVRHand.TrackingConfidence.High;
+        }
+
         public Vector3 Tip(int finger)
         {
             if (UsingStandIn) return editorStandIn.Contact(finger).position;

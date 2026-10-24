@@ -50,8 +50,8 @@ namespace HexRMeta.Learning
     /// Per patient: calibration stores a rest pose and a lifted pose for each finger (fingertip
     /// relative to its knuckle, in the hand frame, so moving the whole hand does not count; key =
     /// finger, not where the tip lands). Progress = how far the finger has moved from rest toward
-    /// its own lifted pose. Lifted above liftOn (and at least minLiftMeters), then back below
-    /// landOff = one press. Whatever movement the patient did in calibration is learnt, so a
+    /// its own lifted pose. Lifted above liftOn (and at least the finger's minimum lift), then back
+    /// below landOff = one press; all three are per finger (2026-10-25, docs/16 §4). Whatever movement the patient did in calibration is learnt, so a
     /// patient who cannot lift a finger may hook it toward the palm instead.
     ///
     /// Other fingers (2026-10-25, docs/16 §2): calibration also records how far each finger drags
@@ -68,14 +68,16 @@ namespace HexRMeta.Learning
     public class FingerPressDetector : MonoBehaviour
     {
         [SerializeField] private TrackedHandFrame frame;
-        [Tooltip("Lifted when the finger has moved this fraction of its calibrated lift.")]
-        [Range(0.2f, 0.9f)] [SerializeField] private float liftOn = 0.4f;
-        [Tooltip("Landed (= key pressed) when it comes back below this fraction.")]
-        [Range(0.05f, 0.8f)] [SerializeField] private float landOff = 0.2f;
+        [Tooltip("Per finger (thumb..little): lifted when the finger has moved this fraction of its calibrated lift. " +
+                 "Ring is higher (most coupled), index lower (most independent); docs/16 §4. Start values, tune on device.")]
+        [SerializeField] private float[] liftOn = (float[])DefaultLiftOn.Clone();
+        [Tooltip("Per finger: landed (= key pressed) when it comes back below this fraction.")]
+        [SerializeField] private float[] landOff = (float[])DefaultLandOff.Clone();
         [Tooltip("Movement starts above this fraction (for the lift time).")]
         [Range(0.02f, 0.5f)] [SerializeField] private float moveStart = 0.1f;
-        [Tooltip("A lift must also be at least this high (m), so tracking jitter is not a press. Floor: calibration raises it per finger to 3 × the jitter measured at rest.")]
-        [SerializeField] private float minLiftMeters = 0.004f;
+        [Tooltip("Per finger: a lift must also be at least this high (m), so tracking jitter is not a press. " +
+                 "Floor: calibration raises it to noiseFactor × the jitter measured at rest.")]
+        [SerializeField] private float[] minLiftMeters = (float[])DefaultMinLift.Clone();
         [Tooltip("Per-finger minimum lift = this × the finger's jitter at rest (when higher than the floor).")]
         [SerializeField] private float noiseFactor = 3f;
         [Tooltip("A finger that moved less than this in calibration cannot press (m).")]
@@ -94,10 +96,26 @@ namespace HexRMeta.Learning
         [SerializeField] private float othersMinLiftFactor = 2f;
         [Tooltip("Two fingers landing within this time: only the one that lifted higher counts (s).")]
         [SerializeField] private float landWindow = 0.2f;
+        [Tooltip("Quest marks a finger low-confidence (hidden): its judgment is frozen; a lift held this long is dropped (s).")]
+        [SerializeField] private float lowConfidenceCancel = 0.5f;
         [Tooltip("Desktop simulation: a held key also lifts its neighbours by this fraction.")]
         [Range(0f, 0.9f)] [SerializeField] private float simCoupling = 0f;
 
         private const float SimRange = 0.02f;
+        private static readonly float[] DefaultLiftOn = { 0.45f, 0.35f, 0.4f, 0.5f, 0.4f };
+        private static readonly float[] DefaultLandOff = { 0.2f, 0.2f, 0.2f, 0.25f, 0.2f };
+        private static readonly float[] DefaultMinLift = { 0.008f, 0.005f, 0.005f, 0.005f, 0.004f };
+
+        // scenes saved before 2026-10-25 had one value for all fingers: those load as empty arrays
+        private void Awake() { FixArrays(); }
+        private void OnValidate() { FixArrays(); }
+
+        private void FixArrays()
+        {
+            if (liftOn == null || liftOn.Length != 5) liftOn = (float[])DefaultLiftOn.Clone();
+            if (landOff == null || landOff.Length != 5) landOff = (float[])DefaultLandOff.Clone();
+            if (minLiftMeters == null || minLiftMeters.Length != 5) minLiftMeters = (float[])DefaultMinLift.Clone();
+        }
 
         private readonly Vector3[] rest = new Vector3[5];
         private readonly Vector3[] dir = new Vector3[5];
@@ -121,6 +139,8 @@ namespace HexRMeta.Learning
         private int expectedMask;
         private bool strictOthers;
         private float lastNow = float.NegativeInfinity;
+        private readonly bool[] reliable = { true, true, true, true, true };
+        private readonly float[] lowSince = new float[5];
 
         /// <summary>Time base for press times (the task's running clock, which stops while paused).</summary>
         public Func<float> Clock = () => Time.time;
@@ -145,6 +165,8 @@ namespace HexRMeta.Learning
         public float Progress(int f) { return progress[f]; }
         public float RawProgress(int f) { return raw[f]; }
         public bool IsLifted(int f) { return lifted[f]; }
+        /// <summary>Quest's tracking confidence for this finger was high this frame (always true in simulation).</summary>
+        public bool Reliable(int f) { return reliable[f]; }
         /// <summary>The key is shown down for a moment after a tap.</summary>
         public bool IsDown(int f) { return Clock() < downUntil[f]; }
         public float RangeMeters(int f) { return range[f]; }
@@ -184,7 +206,7 @@ namespace HexRMeta.Learning
             for (int f = 0; f < 5; f++)
             {
                 rest[f] = poses[f]; dir[f] = Vector3.zero; range[f] = 0f; couplingPoses[f] = null;
-                noise[f] = 0f; minLift[f] = minLiftMeters;
+                noise[f] = 0f; minLift[f] = Floor(f);
                 for (int o = 0; o < 5; o++) coupling[f, o] = 0f;
             }
             Calibrated = false;
@@ -197,7 +219,7 @@ namespace HexRMeta.Learning
             for (int f = 0; f < 5; f++)
             {
                 noise[f] = sigma[f];
-                minLift[f] = Mathf.Max(minLiftMeters, noiseFactor * sigma[f]);
+                minLift[f] = Mathf.Max(Floor(f), noiseFactor * sigma[f]);
             }
         }
 
@@ -250,7 +272,7 @@ namespace HexRMeta.Learning
                 for (int i = 0; i < 5; i++)
                 {
                     range[i] = SimRange;
-                    minLift[i] = minLiftMeters;
+                    minLift[i] = Floor(i);
                     for (int o = 0; o < 5; o++) coupling[i, o] = Mathf.Abs(i - o) == 1 ? simCoupling : 0f;
                 }
             }
@@ -294,6 +316,10 @@ namespace HexRMeta.Learning
                 float k = 1f - Mathf.Exp(-smoothing * dt);
                 for (int f = 0; f < 5; f++)
                 {
+                    bool ok = frame.FingerReliable(f);
+                    if (ok != reliable[f]) lowSince[f] = now;
+                    reliable[f] = ok;
+                    if (!ok) continue;   // hidden finger: keep its last value, judge nothing (below)
                     float r = Usable(f) ? Vector3.Dot(Pose(f) - rest[f], dir[f]) / (range[f] * range[f]) : 0f;
                     raw[f] = Mathf.Lerp(raw[f], r, k);
                 }
@@ -315,9 +341,22 @@ namespace HexRMeta.Learning
             }
 
             JudgeRaw(now);
-            for (int f = 0; f < 5; f++) Judge(f, now);
+            for (int f = 0; f < 5; f++)
+            {
+                if (!reliable[f])
+                {
+                    // neither a press nor an error; a lift that stays hidden too long is dropped
+                    if (lifted[f] && now - lowSince[f] > lowConfidenceCancel) { lifted[f] = false; current[f] = null; }
+                    continue;
+                }
+                Judge(f, now);
+            }
             FlushHeld(now, false);
         }
+
+        private float LiftOn(int f) { return liftOn != null && f < liftOn.Length ? liftOn[f] : 0.4f; }
+        private float LandOff(int f) { return landOff != null && f < landOff.Length ? landOff[f] : 0.2f; }
+        private float Floor(int f) { return minLiftMeters != null && f < minLiftMeters.Length ? minLiftMeters[f] : 0.005f; }
 
         private bool Expected(int f) { return (expectedMask & (1 << f)) != 0; }
         private bool Strict(int f) { return strictOthers && expectedMask != 0 && !Expected(f); }
@@ -327,7 +366,7 @@ namespace HexRMeta.Learning
             if (!lifted[f])
             {
                 if (progress[f] < moveStart) moveFrom[f] = now;
-                float on = Strict(f) ? othersLiftOn : liftOn;
+                float on = Strict(f) ? Mathf.Max(othersLiftOn, LiftOn(f)) : LiftOn(f);
                 float need = Strict(f) ? minLift[f] * othersMinLiftFactor : minLift[f];
                 if (progress[f] > on && progress[f] * range[f] >= need)
                 {
@@ -348,10 +387,10 @@ namespace HexRMeta.Learning
             {
                 if (o == f) continue;
                 i.otherPeak[o] = Mathf.Max(i.otherPeak[o], raw[o]);
-                if (progress[o] > liftOn * 0.8f) coMask[f] |= 1 << o;
+                if (progress[o] > LiftOn(o) * 0.8f) coMask[f] |= 1 << o;
             }
 
-            if (progress[f] < landOff) Land(f, now);
+            if (progress[f] < LandOff(f)) Land(f, now);
         }
 
         /// <summary>The same press rule on raw progress with the base thresholds, for the log only.</summary>
@@ -361,9 +400,9 @@ namespace HexRMeta.Learning
             {
                 if (!rawLifted[f])
                 {
-                    if (raw[f] > liftOn && raw[f] * range[f] >= minLift[f]) rawLifted[f] = true;
+                    if (raw[f] > LiftOn(f) && raw[f] * range[f] >= minLift[f]) rawLifted[f] = true;
                 }
-                else if (raw[f] < landOff)
+                else if (raw[f] < LandOff(f))
                 {
                     rawLifted[f] = false;
                     RawPressed?.Invoke(f, now);
