@@ -74,8 +74,10 @@ namespace HexRMeta.Learning
         [Range(0.05f, 0.8f)] [SerializeField] private float landOff = 0.2f;
         [Tooltip("Movement starts above this fraction (for the lift time).")]
         [Range(0.02f, 0.5f)] [SerializeField] private float moveStart = 0.1f;
-        [Tooltip("A lift must also be at least this high (m), so tracking jitter is not a press.")]
-        [SerializeField] private float minLiftMeters = 0.005f;
+        [Tooltip("A lift must also be at least this high (m), so tracking jitter is not a press. Floor: calibration raises it per finger to 3 × the jitter measured at rest.")]
+        [SerializeField] private float minLiftMeters = 0.004f;
+        [Tooltip("Per-finger minimum lift = this × the finger's jitter at rest (when higher than the floor).")]
+        [SerializeField] private float noiseFactor = 3f;
         [Tooltip("A finger that moved less than this in calibration cannot press (m).")]
         [SerializeField] private float minRangeMeters = 0.008f;
         [Tooltip("The key shows down this long after a tap (s).")]
@@ -100,6 +102,8 @@ namespace HexRMeta.Learning
         private readonly Vector3[] rest = new Vector3[5];
         private readonly Vector3[] dir = new Vector3[5];
         private readonly float[] range = new float[5];
+        private readonly float[] noise = new float[5];      // jitter at rest (m, standard deviation)
+        private readonly float[] minLift = new float[5];    // per finger: max(floor, noiseFactor × noise)
         private readonly bool[] lifted = new bool[5];
         private readonly float[] raw = new float[5];        // smoothed, coupling not subtracted
         private readonly float[] progress = new float[5];   // coupling subtracted
@@ -144,6 +148,9 @@ namespace HexRMeta.Learning
         /// <summary>The key is shown down for a moment after a tap.</summary>
         public bool IsDown(int f) { return Clock() < downUntil[f]; }
         public float RangeMeters(int f) { return range[f]; }
+        public float NoiseMeters(int f) { return noise[f]; }
+        public float MinLiftMeters(int f) { return minLift[f]; }
+        public float MinRangeMeters => minRangeMeters;
         public bool Usable(int f) { return Simulating || range[f] >= minRangeMeters; }
         public Vector3 RestPose(int f) { return rest[f]; }
         public Vector3 PressPose(int f) { return rest[f] + dir[f]; }
@@ -177,9 +184,33 @@ namespace HexRMeta.Learning
             for (int f = 0; f < 5; f++)
             {
                 rest[f] = poses[f]; dir[f] = Vector3.zero; range[f] = 0f; couplingPoses[f] = null;
+                noise[f] = 0f; minLift[f] = minLiftMeters;
                 for (int o = 0; o < 5; o++) coupling[f, o] = 0f;
             }
             Calibrated = false;
+            ReleaseAll();
+        }
+
+        /// <summary>Jitter of each fingertip while the hand rests still (m); sets the per-finger minimum lift.</summary>
+        public void SetNoise(float[] sigma)
+        {
+            for (int f = 0; f < 5; f++)
+            {
+                noise[f] = sigma[f];
+                minLift[f] = Mathf.Max(minLiftMeters, noiseFactor * sigma[f]);
+            }
+        }
+
+        /// <summary>A saved calibration (lift directions and coupling) on top of today's rest pose and jitter.</summary>
+        public void ApplySaved(Vector3[] lift, float[] couplingTable)
+        {
+            for (int f = 0; f < 5; f++)
+            {
+                dir[f] = lift[f];
+                range[f] = lift[f].magnitude;
+                for (int o = 0; o < 5; o++) coupling[f, o] = couplingTable[f * 5 + o];
+            }
+            Calibrated = true;
             ReleaseAll();
         }
 
@@ -219,6 +250,7 @@ namespace HexRMeta.Learning
                 for (int i = 0; i < 5; i++)
                 {
                     range[i] = SimRange;
+                    minLift[i] = minLiftMeters;
                     for (int o = 0; o < 5; o++) coupling[i, o] = Mathf.Abs(i - o) == 1 ? simCoupling : 0f;
                 }
             }
@@ -296,8 +328,8 @@ namespace HexRMeta.Learning
             {
                 if (progress[f] < moveStart) moveFrom[f] = now;
                 float on = Strict(f) ? othersLiftOn : liftOn;
-                float minLift = Strict(f) ? minLiftMeters * othersMinLiftFactor : minLiftMeters;
-                if (progress[f] > on && progress[f] * range[f] >= minLift)
+                float need = Strict(f) ? minLift[f] * othersMinLiftFactor : minLift[f];
+                if (progress[f] > on && progress[f] * range[f] >= need)
                 {
                     lifted[f] = true;
                     coMask[f] = 0;
@@ -329,7 +361,7 @@ namespace HexRMeta.Learning
             {
                 if (!rawLifted[f])
                 {
-                    if (raw[f] > liftOn && raw[f] * range[f] >= minLiftMeters) rawLifted[f] = true;
+                    if (raw[f] > liftOn && raw[f] * range[f] >= minLift[f]) rawLifted[f] = true;
                 }
                 else if (raw[f] < landOff)
                 {

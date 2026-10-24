@@ -109,7 +109,14 @@ namespace HexRMeta.Learning
         [Header("T2 calibration and data")]
         [Tooltip("Hand still on the table this long to take the rest pose (s).")]
         [SerializeField] private float restSeconds = 3f;
+        [Tooltip("Longest wait for one lift in calibration (s).")]
         [SerializeField] private float fingerSeconds = 5f;
+        [Tooltip("Lifts per finger in calibration; the middle one (median) counts.")]
+        [SerializeField] private int liftReps = 3;
+        [Tooltip("Reuse the patient's saved calibration when today's rest pose is close to it (Recalibrate redoes it).")]
+        [SerializeField] private bool useSavedProfile = true;
+        [Tooltip("Saved calibration is reused when the rest pose differs less than this on average (m). Estimate, tune on device.")]
+        [SerializeField] private float profileRestTolerance = 0.01f;
         [Tooltip("L1: the hand only needs to settle this long (s) — Listen asks nothing of the hand, so placing it is easy.")]
         [SerializeField] private float listenRestSeconds = 1f;
         [Tooltip("L1: the palm may drift this much while settling (m); L2/L3 use 1.5 cm.")]
@@ -157,6 +164,10 @@ namespace HexRMeta.Learning
         private bool started;
         private bool recalibrate;
         private PianoLog pianoLog;
+        private string calSource = "new";
+        private float calRestChange = -1f;
+        private readonly float[] calReps = new float[15];
+        private readonly float[] calStability = new float[5];
         private PianoNoteTrial waiting;      // L2 / L3 wait: the note being asked
         private readonly List<PianoNoteTrial> tempoNotes = new List<PianoNoteTrial>();
         private readonly List<PianoNoteTrial> pending = new List<PianoNoteTrial>();
@@ -305,6 +316,7 @@ namespace HexRMeta.Learning
 
         private IEnumerator Calibrate()
         {
+            bool full = recalibrate;   // Recalibrate button: do not reuse the saved profile
             recalibrate = false;
             Step("calibrate");
             if (patientHand != null && patientHand.UsingStandIn)
@@ -327,6 +339,7 @@ namespace HexRMeta.Learning
             ShowGhost(true);
             var sum = new Vector3[5];
             var tipSum = new Vector3[5];
+            var sqSum = new float[5];   // for the jitter at rest
             Vector3 dirSum = Vector3.zero;
             Vector3 palmSum = Vector3.zero, idxSum = Vector3.zero, midSum = Vector3.zero, litSum = Vector3.zero;
             int samples = 0;
@@ -352,13 +365,19 @@ namespace HexRMeta.Learning
                     anchorPalm = palm;
                     still = 0f;
                     samples = 0;
-                    for (int f = 0; f < 5; f++) { sum[f] = Vector3.zero; tipSum[f] = Vector3.zero; }
+                    for (int f = 0; f < 5; f++) { sum[f] = Vector3.zero; tipSum[f] = Vector3.zero; sqSum[f] = 0f; }
                     dirSum = Vector3.zero;
                     palmSum = idxSum = midSum = litSum = Vector3.zero;
                 }
                 still += Time.deltaTime;
                 samples++;
-                for (int f = 0; f < 5; f++) { sum[f] += detector.Pose(f); tipSum[f] += patientHand.Tip(f); }
+                for (int f = 0; f < 5; f++)
+                {
+                    Vector3 p = detector.Pose(f);
+                    sum[f] += p;
+                    sqSum[f] += p.sqrMagnitude;
+                    tipSum[f] += patientHand.Tip(f);
+                }
                 dirSum += patientHand.FingerDir;
                 palmSum += patientHand.Palm;
                 idxSum += patientHand.Knuckle(1);
@@ -384,6 +403,9 @@ namespace HexRMeta.Learning
             float shiftBefore = deskShift;
             AlignRigToDesk(tipsByKey);
             detector.SetRest(restPose);
+            var sigma = new float[5];
+            for (int f = 0; f < 5; f++) sigma[f] = Mathf.Sqrt(Mathf.Max(0f, sqSum[f] / samples - restPose[f].sqrMagnitude));
+            detector.SetNoise(sigma);
             keyboard?.Place(tipsByKey, padOffset, KeyFor(0), dirSum);
             RecordHandPlace(palmSum / samples, idxSum / samples, midSum / samples, litSum / samples, deskShift - shiftBefore);
             ShowGhost(false);
@@ -393,46 +415,170 @@ namespace HexRMeta.Learning
             yield return Wait(0.4f);
             if (level == PianoLevel.Listen) yield break;   // L1 only needs the keys under the hand
 
-            // 2) each finger presses once, as far as is comfortable
+            // 2) the patient's saved calibration, if today's rest pose is close to it
+            calSource = "new";
+            calRestChange = -1f;
+            for (int i = 0; i < calReps.Length; i++) calReps[i] = 0f;
+            for (int f = 0; f < 5; f++) calStability[f] = 0f;
+            PianoProfile saved = useSavedProfile && !full ? LoadProfile() : null;
+            if (saved != null)
+            {
+                float change = saved.RestChange(restPose, f => saved.lift[f].magnitude >= detector.MinRangeMeters);
+                Step("calibrate_profile rest_change_mm=" + (change * 1000f).ToString("0.0"));
+                if (change < profileRestTolerance)
+                {
+                    detector.ApplySaved(saved.lift, saved.coupling);
+                    calSource = "saved";
+                    calRestChange = change * 1000f;
+                }
+            }
+
+            // 3) otherwise each finger lifts liftReps times, as high as is comfortable; the median counts
+            if (calSource == "new")
+            {
+                int reps = Mathf.Max(1, liftReps);
+                for (int f = 0; f < 5; f++)
+                {
+                    int key = KeyFor(f);
+                    Step("calibrate_" + ((HandFinger)f));
+                    keyboard?.SetLit(key, true);
+                    fingerGlow?.Set(f, true);
+                    var dist = new float[reps];
+                    var pose = new Vector3[reps];
+                    var all = new Vector3[reps][];
+                    for (int r = 0; r < reps; r++)
+                    {
+                        card?.Show("Get ready", "Lift your " + FingerWord(f),
+                                   "As high as is comfortable, then put it down  ·  " + (r + 1) + " of " + reps, f + 1, CardTone.Normal);
+                        TouchCue(ChannelFor(f), "CAL_" + (HandFinger)f + "_" + (r + 1));
+                        pose[r] = restPose[f];
+                        all[r] = (Vector3[])restPose.Clone();   // every finger at that moment (coupling)
+                        float t = 0f;
+                        // a lift that is clearly above the jitter, then back down, ends this repetition
+                        float enough = Mathf.Max(detector.MinRangeMeters, 2f * detector.MinLiftMeters(f));
+                        while (t < fingerSeconds)
+                        {
+                            yield return null;
+                            if (State != TaskState.Running) continue;
+                            t += Time.deltaTime;
+                            if (!detector.Tracked) continue;
+                            Vector3 p = detector.Pose(f);
+                            float d = (p - restPose[f]).magnitude;
+                            if (d > dist[r])
+                            {
+                                dist[r] = d;
+                                pose[r] = p;
+                                for (int o = 0; o < 5; o++) all[r][o] = detector.Pose(o);
+                            }
+                            if (t > 0.8f && dist[r] > enough && d < 0.4f * dist[r]) break;   // lifted and put down again
+                        }
+                        calReps[f * 3 + Mathf.Min(r, 2)] = dist[r] * 1000f;
+                        yield return Wait(0.4f);
+                    }
+                    int m = MedianIndex(dist);
+                    detector.SetPress(f, pose[m]);
+                    detector.SetCouplingSample(f, all[m]);
+                    float mean = 0f, sd = 0f;
+                    for (int r = 0; r < reps; r++) mean += dist[r] / reps;
+                    for (int r = 0; r < reps; r++) sd += (dist[r] - mean) * (dist[r] - mean) / reps;
+                    calStability[f] = mean > 0f ? Mathf.Sqrt(sd) / mean : 0f;
+                    keyboard?.SetLit(key, false);
+                    fingerGlow?.Set(f, false);
+                    var repsText = new System.Text.StringBuilder();
+                    for (int r = 0; r < reps; r++) repsText.Append(r > 0 ? "/" : "").Append((dist[r] * 1000f).ToString("0.0"));
+                    if (log != null) log.Trial("calibrate_" + (HandFinger)f, -1, "", -1, -1, -1f,
+                                               "range_mm=" + (dist[m] * 1000f).ToString("0.0") + " reps_mm=" + repsText +
+                                               (detector.Usable(f) ? "" : " not_usable"));
+                    yield return Wait(0.3f);
+                }
+                detector.FinishCalibration();
+                // a session where no finger moved (e.g. hand not really tracked) must not replace a good profile
+                bool anyUsable = false;
+                for (int f = 0; f < 5; f++) anyUsable |= detector.Usable(f);
+                if (anyUsable) SaveProfile(restPose);
+            }
+            WriteCalibration(false);
+
+            // fingers that cannot press: the therapist sees them on the card (L2 notes need Skip, L3 plays them)
+            var unusable = new List<string>();
+            for (int f = 0; f < 5; f++) if (!detector.Usable(f)) unusable.Add(FingerWord(f));
+            card?.Show("Get ready", "Ready", unusable.Count > 0 ? "Not used: " + string.Join(", ", unusable) : "", 5, CardTone.Done);
+            yield return Wait(unusable.Count > 0 ? 2.5f : 1f);
+        }
+
+        /// <summary>L3: a note whose finger was not usable in calibration (real hand only).</summary>
+        private bool Untestable(int[] keys)
+        {
+            if (detector == null || detector.Simulating) return false;
+            foreach (int k in keys) if (!detector.Usable(FingerFor(k))) return true;
+            return false;
+        }
+
+        /// <summary>The keys go down and sound by themselves (as in L1).</summary>
+        private IEnumerator PlayForPatient(int[] keys)
+        {
+            foreach (int k in keys)
+            {
+                autoDown[k] = true;
+                if (pianoSound) synth?.Play(k);
+            }
+            yield return Wait(0.4f);
+            foreach (int k in keys) autoDown[k] = false;
+        }
+
+        private static int MedianIndex(float[] v)
+        {
+            var idx = new int[v.Length];
+            for (int i = 0; i < idx.Length; i++) idx[i] = i;
+            System.Array.Sort(idx, (a, b) => v[a].CompareTo(v[b]));
+            return idx[idx.Length / 2];
+        }
+
+        private string ProfilePath()
+        {
+            string dir = System.IO.Path.Combine(Application.persistentDataPath, "learning", "profiles");
+            return System.IO.Path.Combine(dir, participantId + "_T2_" + hand + ".json");
+        }
+
+        private PianoProfile LoadProfile()
+        {
+            try
+            {
+                string path = ProfilePath();
+                if (!System.IO.File.Exists(path)) return null;
+                var p = JsonUtility.FromJson<PianoProfile>(System.IO.File.ReadAllText(path));
+                return p != null && p.lift != null && p.lift.Length == 5 && p.coupling != null && p.coupling.Length == 25 ? p : null;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[Learning] T2 profile not read: " + e.Message);
+                return null;
+            }
+        }
+
+        private void SaveProfile(Vector3[] restPose)
+        {
+            var p = new PianoProfile
+            {
+                participant = participantId, hand = hand.ToString(),
+                saved = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            };
             for (int f = 0; f < 5; f++)
             {
-                int key = KeyFor(f);
-                Step("calibrate_" + ((HandFinger)f));
-                card?.Show("Get ready", "Lift your " + FingerWord(f), "As high as is comfortable, then put it down", f + 1, CardTone.Normal);
-                keyboard?.SetLit(key, true);
-                fingerGlow?.Set(f, true);
-                TouchCue(ChannelFor(f), "CAL_" + (HandFinger)f);
-                Vector3 best = restPose[f];
-                var bestAll = (Vector3[])restPose.Clone();   // every finger at that moment (coupling)
-                float bestDist = 0f, t = 0f;
-                while (t < fingerSeconds)
-                {
-                    yield return null;
-                    if (State != TaskState.Running) continue;
-                    t += Time.deltaTime;
-                    if (!detector.Tracked) continue;
-                    Vector3 pose = detector.Pose(f);
-                    float d = (pose - restPose[f]).magnitude;
-                    if (d > bestDist)
-                    {
-                        bestDist = d;
-                        best = pose;
-                        for (int o = 0; o < 5; o++) bestAll[o] = detector.Pose(o);
-                    }
-                    if (t > 1f && bestDist > 0.015f && d < 0.4f * bestDist) break;   // lifted and put down again
-                }
-                detector.SetPress(f, best);
-                detector.SetCouplingSample(f, bestAll);
-                keyboard?.SetLit(key, false);
-                fingerGlow?.Set(f, false);
-                if (log != null) log.Trial("calibrate_" + (HandFinger)f, -1, "", -1, -1, -1f,
-                                           "range_mm=" + (bestDist * 1000f).ToString("0.0") + (detector.Usable(f) ? "" : " not_usable"));
-                yield return Wait(0.5f);
+                p.rest[f] = restPose[f];
+                p.lift[f] = detector.PressPose(f) - detector.RestPose(f);
+                for (int o = 0; o < 5; o++) p.coupling[f * 5 + o] = detector.Coupling(f, o);
             }
-            detector.FinishCalibration();
-            WriteCalibration(false);
-            card?.Show("Get ready", "Ready", "", 5, CardTone.Done);
-            yield return Wait(1f);
+            try
+            {
+                string path = ProfilePath();
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+                System.IO.File.WriteAllText(path, JsonUtility.ToJson(p, true));
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[Learning] T2 profile not saved: " + e.Message);
+            }
         }
 
         /// <summary>
@@ -486,6 +632,15 @@ namespace HexRMeta.Learning
             c.desk_shift_mm = deskShift * 1000f;
             for (int i = 0; i < 5; i++)
                 for (int o = 0; o < 5; o++) c.coupling[i * 5 + o] = detector.Coupling(i, o);
+            c.source = simulated ? "simulated" : calSource;
+            c.rest_change_mm = calRestChange;
+            for (int f = 0; f < 5; f++)
+            {
+                c.noise_mm[f] = detector.NoiseMeters(f) * 1000f;
+                c.min_lift_mm[f] = detector.MinLiftMeters(f) * 1000f;
+                c.stability[f] = calStability[f];
+            }
+            System.Array.Copy(calReps, c.lift_reps_mm, 15);
             pianoLog.WriteJson("calibration.json", c);
         }
 
@@ -640,10 +795,22 @@ namespace HexRMeta.Learning
                     {
                         index = noteIndex, targets = notes[i].keys, onset = clock, cues = CueTag, strayIgnored = true,
                     };
+                    if (testStart < 0f) testStart = clock;
+                    if (Untestable(n.targets))
+                    {
+                        // a finger that could not press in calibration: the piano plays it, no rating
+                        n.untested = true;
+                        n.answered = true;
+                        yield return PlayForPatient(n.targets);
+                        Rate(n);
+                        Close(n);
+                        testTrials.Add(n);
+                        yield return Wait(gapAfterNote);
+                        continue;
+                    }
                     waiting = n;
                     detector?.SetExpected(FingerMask(n.targets), false);
                     skipRequested = false;
-                    if (testStart < 0f) testStart = clock;
                     foreach (Cue c in CueOrder()) FireCue(c, n.targets);
                     while (!n.answered && !skipRequested && clock - n.onset < missAfterSeconds) yield return null;
                     if (!n.answered) { n.omitted = true; n.skipped = skipRequested; }
@@ -685,6 +852,12 @@ namespace HexRMeta.Learning
                         prevHalf = half;
                         tempoNotes.Add(n);
                         testTrials.Add(n);
+                        if (Untestable(n.targets))
+                        {
+                            n.untested = true;
+                            n.answered = true;
+                            StartCoroutine(PlayForPatient(n.targets));
+                        }
                         detector?.SetExpected(FingerMask(n.targets), false);
                         foreach (Cue c in CueOrder()) FireCue(c, n.targets);
                         float lit = Mathf.Min(duration * 0.8f, 0.6f);
@@ -711,7 +884,7 @@ namespace HexRMeta.Learning
             {
                 int seconds = Mathf.RoundToInt(playSeconds);
                 int acc = 0, n = 0;
-                foreach (PianoNoteTrial t in testTrials) { n++; if (t.hitTime >= 0f) acc++; }
+                foreach (PianoNoteTrial t in testTrials) { if (t.untested) continue; n++; if (t.hitTime >= 0f) acc++; }
                 card?.Show(LevelName(PianoLevel.Test), "Congratulations!",
                            "Played " + (n > 0 ? Mathf.RoundToInt(100f * acc / n) : 0) + "%  ·  Time " + seconds / 60 + ":" + (seconds % 60).ToString("00"),
                            5, CardTone.Done);
@@ -746,6 +919,7 @@ namespace HexRMeta.Learning
             int rtN = 0, errN = 0;
             foreach (PianoNoteTrial n in testTrials)
             {
+                if (n.untested) { s.untested++; continue; }
                 s.notes++;
                 if (n.correct) s.correct++;
                 if (n.omitted) s.omitted++;
@@ -791,6 +965,7 @@ namespace HexRMeta.Learning
         private void Rate(PianoNoteTrial n)
         {
             if (n.rating.Length > 0) return;
+            if (n.untested) { n.rating = "Untested"; return; }   // not shown to the patient
             if (n.hitTime < 0f) n.rating = "Miss";
             else
             {
@@ -1214,7 +1389,7 @@ namespace HexRMeta.Learning
             var r = new PianoRunResult { level = level, song = current != null ? current.title : "", completed = EndReason == "completed" };
             if (level == PianoLevel.Test)
             {
-                foreach (PianoNoteTrial t in testTrials) { r.notes++; if (t.hitTime >= 0f) r.correct++; }
+                foreach (PianoNoteTrial t in testTrials) { if (t.untested) continue; r.notes++; if (t.hitTime >= 0f) r.correct++; }
                 r.seconds = testPlaySeconds;
             }
             else

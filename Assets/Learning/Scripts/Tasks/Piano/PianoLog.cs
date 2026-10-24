@@ -34,6 +34,7 @@ namespace HexRMeta.Learning
         public bool correct;            // right first time (no other finger before it)
         public bool omitted;
         public bool skipped;            // Skip button
+        public bool untested;           // L3: the target finger was not usable in calibration (played for the patient)
         public string rating = "";     // L3: Perfect / Very good / Nice / Miss
         public float closedAt = -1f;    // clock time the note ended (answered or omitted)
 
@@ -90,6 +91,41 @@ namespace HexRMeta.Learning
         public float desk_shift_mm;     // VR rig moved up (+) / down (-) to line the real table up with the virtual desk
         // 5×5, row = finger lifted fully, column = how far that drags each finger (fraction of its own lift)
         public float[] coupling = new float[25];
+        public string source;           // "new" (full calibration) or "saved" (profile reused, rest pose new)
+        public float[] noise_mm = new float[5];      // fingertip jitter at rest (SD)
+        public float[] min_lift_mm = new float[5];   // per finger: max(floor, 3 × jitter)
+        public float[] lift_reps_mm = new float[15]; // 3 lifts per finger, finger-major (new calibration only)
+        public float[] stability = new float[5];     // SD / mean of the 3 lifts (lower = steadier)
+        public float rest_change_mm = -1f;           // saved profile: mean rest-pose difference to today
+    }
+
+    /// <summary>
+    /// One patient's T2 calibration kept between sessions (persistentDataPath/learning/profiles/):
+    /// lift direction per finger and the coupling table. Today's rest pose and jitter are always new.
+    /// </summary>
+    [Serializable]
+    public class PianoProfile
+    {
+        public string participant;
+        public string hand;
+        public string saved;
+        public Vector3[] rest = new Vector3[5];
+        public Vector3[] lift = new Vector3[5];      // lifted pose − rest pose
+        public float[] coupling = new float[25];
+
+        /// <summary>Mean rest-pose difference (m) over the fingers that can press.</summary>
+        public float RestChange(Vector3[] today, Func<int, bool> usable)
+        {
+            float sum = 0f;
+            int n = 0;
+            for (int f = 0; f < 5; f++)
+            {
+                if (!usable(f)) continue;
+                sum += (today[f] - rest[f]).magnitude;
+                n++;
+            }
+            return n > 0 ? sum / n : float.PositiveInfinity;
+        }
     }
 
     [Serializable]
@@ -108,6 +144,7 @@ namespace HexRMeta.Learning
         public float completion;        // hits / notes (shown to the patient)
         public int stray_presses;       // other fingers that pressed while a note waited
         public int whole_hand;          // three or more fingers together (ignored)
+        public int untested;            // notes for a finger that was not usable (not in notes / hits)
         public float mean_reaction_s;
         public float mean_abs_timing_error_s;
         public float play_seconds;      // first cue to the end of the last note
