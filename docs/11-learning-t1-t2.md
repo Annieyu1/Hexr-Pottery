@@ -32,8 +32,8 @@
 
 **T1 牵手**(组件 `HandHoldTask`,2026-10-19 改为分步流程,去掉了孩子的手;用患者自己的 VR 手):
 - **Step 1 · 握住手**:模型手以握手姿势悬在桌面**等待垫**上方并**招手**(手指从食指到小指依次缓慢张开、合拢,周期约 2.4 s)。同时显示**引导**:一只浅青色半透明、缓慢呼吸的**幽灵手**(患者的右手,握手姿势,掌心对着模型手),上方一个上下浮动的**箭头**指向它。患者握住后引导消失。患者的手掌靠近模型手(< `grabDistance` 8 cm)**并且握拳**(四指平均弯曲 > `gripCurlDegrees` 50°)时,模型手绑定到真手上并跟着移动。(原来"6 s 后模型手自己过来"的辅助已去掉,见下方界面说明。)
-- **Step 2 · 轻握**:先预告"我们会轻轻握你的手",然后轻握 0.25,让患者感受 5 s。
-- **Step 2.1 · 回握**:提示"用同样的力握回去",持续 5 s。手套**测不了患者的力**,这一步只把这段时间的手指平均弯曲角度记进日志。
+- **Step 2 · 轻握**:先预告"我们会轻轻握你的手",然后轻握 0.25,让患者感受 3 s(2026-10-22 从 5 s 改短;计时只在握住时走,到时间自动进下一步,**不要求松手**)。
+- **Step 2.1 · 回握**:提示"用同样的力握回去",握住 3 s 就算完成,自动进下一步,不要求松手(中风后主动伸指/松手往往比握紧更难:Kamper & Rymer 2001,PMID 11317278;Kamper 2006,PMID 16935065)。手套**测不了患者的力**,这一步只把这段时间的手指平均弯曲角度记进日志。
 - **Step 3 / 3.1**:流程和 Step 2 / 2.1 一样,换成紧握 0.65。
 - **Step 4.n · 数次数**:以轻握为底,捏 2/3/4 下,每次随机是轻(0.4)还是重(0.7),1 Hz。6 种组合放进一个洗牌袋,抽完再重洗。捏完后浮空按钮 **2 / 3 / 4** 出现,患者用手戳按钮作答(按钮放在健侧,所以患侧手可以一直握着),然后显示绿色"Correct!"或红色"Not quite. It was N",并播放提示音。
 - 做满 `minQuizRounds`(5)轮以后,每轮结束会出现 **One more / Finish** 两个按钮;按 Finish 显示 **Congratulations!**。
@@ -45,7 +45,7 @@
 - 治疗师按钮按设计稿:Start、Pause、Hints(= 切换辅助级)、**Skip step**(跳过当前步骤或当前轮,日志记 `skip_step`);暂停后是 Resume 和 End。键盘:R = Feel again,S = Skip step。
 - 实现:`StepCard` / `TipCard`(`Assets/Learning/Scripts/UI/`),构建器 `LearningSceneBuilder.T1Ui.cs` 生成全部界面(九宫格圆角贴图 `Assets/Learning/Art/UI/round_panel.png` / `round_ring.png`,图标在 `Art/UI/T1/`,Inter 字体在 `Art/Fonts/`,1 设计 px = 0.5 mm)。按钮仍是 Meta 的戳按钮,只换外观,戳的区域按设计尺寸调整。
 - T1 不显示指尖黄点(`ChannelHighlights`),也没有编辑器替身手(2026-10-19);在电脑上测试需要 Link 手部追踪。
-- 握住时模型手的弯曲调小了(轻握 0.3、紧握 0.45,捏的峰值 0.42 / 0.55),拇指只弯 1/4(`StylizedHand.thumbCurlScale` 0.25),`palmGap` 改为 2.2 cm,用来减少穿模。
+- 握住时模型手的弯曲调小了(轻握 0.3、紧握 0.45)。**第 4 步捏的时候模型手不动**(2026-10-22):只保持握住的姿势,不做跟着捏的手指动作,次数只能靠触觉判断(包括 Feel again 和答错后的重捏),拇指只弯 1/4(`StylizedHand.thumbCurlScale` 0.25),`palmGap` 改为 2.2 cm,用来减少穿模。
 
 **T2 弹琴**:2026-10-20 改为三个层次(L1 感受 / L2 学弹 / L3 测试),用患者自己的手、琴键对齐真实桌面,详见 **`12-t2-piano-three-levels.md`**。
 
@@ -73,7 +73,7 @@
 ## 4. 改参数
 
 - 所有触觉事件都在任务组件的 **T1/T2 touch events** 里(`HapticSpec`:通道、类型、强度 0.1–1、速度、频率、次数、结束压力),就是 docs/10 §5.9 的事件库。
-- T1 招手:`beckonPeriod`(2.4 s)、`beckonOpenCurl` / `beckonClosedCurl`(手指张合范围)、`beckonBob`(浮动幅度,默认 0,因为要和幽灵手对齐)。握住时的弯曲:`gentleCurl`、`firmCurl`、`squeezePeakLight`、`squeezePeakFirm`。引导的呼吸和箭头浮动在 `HandGuide` 组件上。
+- T1 招手:`beckonPeriod`(2.4 s)、`beckonOpenCurl` / `beckonClosedCurl`(手指张合范围)、`beckonBob`(浮动幅度,默认 0,因为要和幽灵手对齐)。握住时的弯曲:`gentleCurl`、`firmCurl`。引导的呼吸和箭头浮动在 `HandGuide` 组件上。
 - T1 握手检测与跟随:`gripCurlDegrees`、`releaseCurlDegrees`、`releaseDebounceSeconds`、`grabDistance`、`followSharpness`、`palmGap`、`palmForward`。T1 时长:`feelSeconds`、`matchSeconds`、`previewSeconds`、`feedbackSeconds`、`doneSeconds`(1 s)、`tipAfterSeconds`(8 s)。Step 4:`squeezeCounts`(默认 2/3/4)、`minQuizRounds`(默认 5)。以上都在 `HandHoldTask` 上。
 - 患侧手:任务组件上的 `hand`(会同时设置 `HapticPlayer`)。T2 的琴键是按右手建的,改左手要重建场景(把 `LearningSceneBuilder.DefaultHand` 改成 Left)。
 

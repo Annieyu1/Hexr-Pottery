@@ -299,3 +299,12 @@ PICO 场景里实际的连线(供对照):
 - **球和球垫 1.2 倍**(球垫底贴桌面,球放在上面)。
 - **抓取引导**:要抓的球下面有绿色柔光 + 向外扩散的圆环(`GrabHint`);Stage 1 跟着步骤走,Stage 2 对还没放进篮子的球显示;抓着或暂停时隐藏。
 - 编辑器 Play 测试(反射模拟放球):Task 1 7/9 = 78%、用时显示;Harder 三轮力度都来自 15/30/45/60;6 轮总计 16/18 = 89%;Replay 清零、Back 回到 1.1。旧的 `HexR_Stages.unity`(Meta 模板版)没有更新,需要的话重建。
+
+## 10. 手套力度修复(2026-10-22)
+
+- **现象**:Quest APK 上 Stage 1.1 的 10 → 60、Stage 1.2 的两个球手感一样,都很强。
+- **原因**:HexR 0.9.3 的 `HexRInteractableHaptics` 按 0–60 发压力,但手套编码器 `Haptics.HEXRPressure` 要的是 0.1–1 的强度,大于 1 一律按 1(最大 50 kPa)。所以 10 及以上全是最大压力。这是 HexR 包里组件和编码器不匹配,不是我们的设置问题。
+- **改法**:`HapticStrength` 自己在抓起 / 松开时直接给手套发压力(和 Learning 的 `GloveOutput` 一样走 `HaptGloveHandler`),`HexRInteractableHaptics` 在球上被关掉,只用来读用哪几个通道。用哪只手套:看是哪只手的 `HandGrabInteractor` 发出的抓取事件。
+- **换算**:手套强度 0.1–1 对应 15–50 kPa,设计值按这个换:10 → 0.10(15 kPa)、35 → 0.61(35 kPa)、60 → 1.00(50 kPa);Harder 的 15 / 30 / 45 / 60 → 15 / 30 / 45 / 50 kPa,其中 45 和 60 只差 5 kPa,实测如果分不出来要重新选 Harder 的档位。
+- 暂停时关抓取会让手松开,`HapticStrength` 在松开时放气,所以暂停照样不出力。
+- 未验证:编辑器里没有手套,需要在 Quest + 手套上重新测。

@@ -338,7 +338,13 @@ namespace HexRMeta.Stages
             currentState = Stage1State.Completed;
             ShowStep(5, "Well done!", "Press Next when you are ready", CardTone.Done);
             if (stage12Menu != null)
+            {
                 stage12Menu.SetActive(true);
+                // The group is what gets hidden between runs; a button inside it switched off while
+                // being placed by hand would otherwise never show.
+                foreach (Transform child in stage12Menu.transform)
+                    child.gameObject.SetActive(true);
+            }
 
             Debug.Log("[Stage1.2] NEXT AVAILABLE");
         }

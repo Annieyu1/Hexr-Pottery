@@ -62,8 +62,6 @@ namespace HexRMeta.Learning
         [Header("T1 model hand curl while held (0 flat, 1 fist; lower = less clipping)")]
         [SerializeField] private float gentleCurl = 0.3f;
         [SerializeField] private float firmCurl = 0.45f;
-        [SerializeField] private float squeezePeakLight = 0.42f;
-        [SerializeField] private float squeezePeakFirm = 0.55f;
 
         [Header("T1 grip")]
         [Tooltip("Mean finger curl (deg) that counts as gripping. See TrackedHandFrame.GripCurlDegrees.")]
@@ -97,9 +95,9 @@ namespace HexRMeta.Learning
 
         [Header("T1 timing (s)")]
         [Tooltip("Steps 2 and 3: how long the patient feels the hold (counted only while holding).")]
-        [SerializeField] private float feelSeconds = 5f;
+        [SerializeField] private float feelSeconds = 3f;
         [Tooltip("Steps 2-1 and 3-1: how long the patient holds back.")]
-        [SerializeField] private float matchSeconds = 5f;
+        [SerializeField] private float matchSeconds = 3f;
         [SerializeField] private float previewSeconds = 2f;
         [SerializeField] private float feedbackSeconds = 2.5f;
         [Tooltip("Green 'Done' state shown at the end of a step (design: 1 s).")]
@@ -389,12 +387,12 @@ namespace HexRMeta.Learning
                 player.Play(sq);
                 bool cut = false;
                 float period = 1f / Mathf.Max(0.1f, sq.frequencyHz), t = 0f, dur = count * period;
-                float high = firm ? squeezePeakFirm : squeezePeakLight;
+                // The model hand just keeps holding: the count must come from touch alone, so it
+                // shows no squeeze motion (2026-10-22).
                 while (t < dur)
                 {
                     if (!attached || skipRequested) { cut = true; break; }
                     if (State == TaskState.Running) t += Time.deltaTime;
-                    partnerHand.SetCurlAll(Mathf.Repeat(t / period, 1f) < 0.5f ? high : heldCurl);
                     yield return null;
                 }
                 if (!cut) break;

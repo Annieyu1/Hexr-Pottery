@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using HexR;
 using Oculus.Interaction;
 using UnityEngine;
 
@@ -11,7 +10,7 @@ namespace HexRMeta.Stages
     /// - puts it back where it started when it drops below a safety height (never while it is held),
     /// - ResetNow() for Replay / Menu,
     /// - SetHeld() for scripted moves (the Stage 1.2 split),
-    /// - while the stage is paused: frozen in place, not grabbable, no glove pressure.
+    /// - while the stage is paused: frozen in place, not grabbable (so no glove pressure).
     /// Kinematic changes go through Meta's reference-counted LockKinematic so they never fight the Grabbable.
     /// </summary>
     public class BallSafetyReset : MonoBehaviour
@@ -29,7 +28,6 @@ namespace HexRMeta.Stages
 
         private Rigidbody rb;
         private GrabNotifier grab;
-        private HexRInteractableHaptics haptics;
         private readonly List<MonoBehaviour> interactables = new List<MonoBehaviour>();
 
         private bool initialized;
@@ -60,7 +58,6 @@ namespace HexRMeta.Stages
             if (rb == null)
                 rb = GetComponentInChildren<Rigidbody>(true);
             grab = GetComponent<GrabNotifier>();
-            haptics = GetComponentInChildren<HexRInteractableHaptics>(true);
             foreach (MonoBehaviour mb in GetComponentsInChildren<MonoBehaviour>(true))
                 if (mb is IInteractable)
                     interactables.Add(mb);
@@ -183,7 +180,10 @@ namespace HexRMeta.Stages
             }
         }
 
-        /// <summary>Grabbing is on unless paused, held by a script or being reset. Glove pressure is off while paused.</summary>
+        /// <summary>
+        /// Grabbing is on unless paused, held by a script or being reset. Switching it off drops the
+        /// hand, and HapticStrength releases the glove on that drop.
+        /// </summary>
         private void RefreshInteraction()
         {
             bool on = !pauseLock && !holdLock && !resetLock;
@@ -195,9 +195,6 @@ namespace HexRMeta.Stages
             foreach (MonoBehaviour mb in interactables)
                 if (mb != null)
                     mb.enabled = on;
-
-            if (haptics != null)
-                haptics.enabled = !pauseLock;
 
             if (on && grab != null)
                 grab.Muted = false;

@@ -11399,8 +11399,8 @@ MonoBehaviour:
     popUp: {fileID: 304924156}
     ambient: {fileID: 303315557}
     burst: {fileID: 0}
-  - task: T11 Open Bottle
-    scene: T11_OpenBottle
+  - task: Ball
+    scene: HexR_Stages_Room
     leftPaper: {r: 0.9019608, g: 0.9411765, b: 0.9647059, a: 1}
     rightPaper: {r: 0.9019608, g: 0.9411765, b: 0.9647059, a: 1}
     left: {fileID: 134492543}
@@ -16257,7 +16257,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1140985127
 Transform:
   m_ObjectHideFlags: 0

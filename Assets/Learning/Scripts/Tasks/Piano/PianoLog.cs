@@ -115,7 +115,7 @@ namespace HexRMeta.Learning
         public const string TrialsHeader =
             "session_id,level,song,round,note_index,target_keys,target_fingers,cues,timing,tempo,rating," +
             "onset_s,response_s,reaction_s,timing_error_s,response_key,response_finger,correct,wrong_presses,omitted,skipped," +
-            "co_active,peak_progress,peak_flex_deg,peak_speed,press_s,glove_connected";
+            "co_active,peak_progress,peak_lift_mm,peak_flex_deg,land_speed_mm_s,lift_start_s,lift_reaction_s,lift_s,glove_connected";
 
         private readonly string folder;
         private readonly string sessionId;
@@ -172,8 +172,11 @@ namespace HexRMeta.Learning
               .Append(n.skipped ? 1 : 0).Append(',')
               .Append(p != null ? Clean(p.coActive) : "").Append(',')
               .Append(p != null ? p.peakProgress.ToString("0.00", C) : "").Append(',')
+              .Append(p != null ? p.peakLiftMm.ToString("0.0", C) : "").Append(',')
               .Append(p != null ? p.peakFlexDegrees.ToString("0.0", C) : "").Append(',')
-              .Append(p != null ? p.peakSpeed.ToString("0.00", C) : "").Append(',')
+              .Append(p != null ? p.landSpeedMmS.ToString("0", C) : "").Append(',')
+              .Append(p != null ? p.liftStart.ToString("0.000", C) : "").Append(',')
+              .Append(p != null ? (p.liftStart - n.onset).ToString("0.000", C) : "").Append(',')
               .Append(p != null && p.Done ? p.Seconds.ToString("0.000", C) : "").Append(',')
               .Append(glove ? 1 : 0);
             trials.WriteLine(sb.ToString());

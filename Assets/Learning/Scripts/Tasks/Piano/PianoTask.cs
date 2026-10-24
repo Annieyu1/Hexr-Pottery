@@ -396,7 +396,7 @@ namespace HexRMeta.Learning
             {
                 int key = KeyFor(f);
                 Step("calibrate_" + ((HandFinger)f));
-                card?.Show("Get ready", "Press with your " + FingerWord(f), "As far as is comfortable, then relax", f + 1, CardTone.Normal);
+                card?.Show("Get ready", "Lift your " + FingerWord(f), "As high as is comfortable, then put it down", f + 1, CardTone.Normal);
                 keyboard?.SetLit(key, true);
                 fingerGlow?.Set(f, true);
                 TouchCue(ChannelFor(f), "CAL_" + (HandFinger)f);
@@ -411,7 +411,7 @@ namespace HexRMeta.Learning
                     Vector3 pose = detector.Pose(f);
                     float d = (pose - restPose[f]).magnitude;
                     if (d > bestDist) { bestDist = d; best = pose; }
-                    if (t > 1f && bestDist > 0.015f && d < 0.4f * bestDist) break;   // pressed and relaxed again
+                    if (t > 1f && bestDist > 0.015f && d < 0.4f * bestDist) break;   // lifted and put down again
                 }
                 detector.SetPress(f, best);
                 keyboard?.SetLit(key, false);
@@ -848,7 +848,7 @@ namespace HexRMeta.Learning
             // desktop stand-in hand shows the simulated presses
             if (detector != null && detector.Simulating && patientHand != null && patientHand.StandIn != null)
                 for (int f = 0; f < 5; f++)
-                    patientHand.StandIn.SetCurl((HandFinger)f, detector.IsDown(f) || autoDown[KeyFor(f)] ? 0.6f : 0.3f);
+                    patientHand.StandIn.SetCurl((HandFinger)f, detector.IsLifted(f) ? 0.05f : autoDown[KeyFor(f)] ? 0.6f : 0.3f);
         }
 
         private void Close(PianoNoteTrial n)

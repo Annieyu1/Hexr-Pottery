@@ -5,10 +5,7 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
-    path: Assets/HexRStages/Scenes/HexR_Stages_Room.unity
-    guid: a42111954585046b7a0f2301560aa39e
-  - enabled: 1
+  - enabled: 0
     path: Assets/HexRStages/Scenes/HexR_Stages.unity
     guid: 094b95c046d324bceb2ff6fdb8178fcc
   - enabled: 0
@@ -21,11 +18,14 @@ EditorBuildSettings:
     path: Assets/Scenes/Meta.unity
     guid: 450b19f5795a34164a81f6d23c97b115
   - enabled: 1
-    path: Assets/Learning/Scenes/T1_HandHold.unity
-    guid: 3bfb08897e18e4458929359ef92ad4b6
-  - enabled: 1
     path: Assets/Learning/Scenes/Hub_Menu.unity
-    guid: 155942a1c36234ef9bd95ce9e7f26b33
+    guid: 8923a2b0f01964daaae9475f668f446f
+  - enabled: 1
+    path: Assets/Learning/Scenes/T1_HandHold.unity
+    guid: 45e6b02c7e9944fb197036c748024834
+  - enabled: 1
+    path: Assets/HexRStages/Scenes/HexR_Stages_Room.unity
+    guid: a42111954585046b7a0f2301560aa39e
   - enabled: 1
     path: Assets/Learning/Scenes/T2_Piano.unity
     guid: ce77fab035fbc433ba7d4d29be4b03a4
@@ -35,6 +35,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Learning/Scenes/T11_OpenBottle.unity
     guid: 7a73baff0f49241038fd486c6e40c140
+  - enabled: 0
+    path: Assets/Learning/Scenes/HexR_Stages_Room.unity
+    guid: 7d8eb13b998e24724a1b64dd304ff13e
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 7ad12a68e96817a4fb4fe4267015b83a, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: fa42c867ad27fbd448afb69a299f5913, type: 2}
