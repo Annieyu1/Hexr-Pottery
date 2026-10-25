@@ -10,11 +10,11 @@ namespace HexRMeta.Learning
     ///
     /// Place() moves the keyboard under the patient's resting fingertips (so the keys line up with
     /// the real table) and spaces the keys to the patient's own finger spacing.
-    /// Model mode (modelRoot set, e.g. Assets/Art/Props/T2/T2_Keyboard.fbx): the whole model is
-    /// scaled in X to spacing / modelPitch and only the five key pivots tip; nothing else moves.
-    /// The scale is capped so the keyboard stays on the desk (maxModelWidth, 2026-10-25); with a wide
-    /// hand the five keys are then a little narrower than the fingers, which does not matter for the
-    /// judgment (key = finger). The model's black keys are one merged mesh, so they stretch with it.
+    /// Model mode (modelRoot set, e.g. Assets/Art/Props/T2/T2_Keyboard.fbx): the model keeps its
+    /// size; only the five playable keys (C..G) are moved and widened to the patient's spacing from
+    /// each calibration (2026-10-25), between minKeySpacing and maxKeySpacing. Wider keys reach over
+    /// the neighbouring keys (B, A) and sit overlapLift higher so they draw on top; the model's black
+    /// keys are one merged mesh and stay where they are.
     /// </summary>
     public class PianoKeyboard : MonoBehaviour
     {
@@ -39,10 +39,12 @@ namespace HexRMeta.Learning
         [SerializeField] private Transform modelRoot;
         [Tooltip("White-key pitch the model was built with (m).")]
         [SerializeField] private float modelPitch = 0.022f;
-        [Tooltip("Model width at scale 1 (m): T2_Keyboard.fbx, 29 white keys plus the case.")]
-        [SerializeField] private float modelWidth = 0.668f;
-        [Tooltip("The keyboard is never scaled wider than this (m); the study-room desk is 0.96 m.")]
-        [SerializeField] private float maxModelWidth = 0.75f;
+        [Tooltip("Model mode: the five keys are drawn at least this far apart (m).")]
+        [SerializeField] private float minKeySpacing = 0.014f;
+        [Tooltip("Model mode: and at most this far apart (m); wider keys cover more of the neighbouring keys.")]
+        [SerializeField] private float maxKeySpacing = 0.028f;
+        [Tooltip("Model mode: keys wider than the model's own sit this much higher, on top of their neighbours (m).")]
+        [SerializeField] private float overlapLift = 0.001f;
         [Tooltip("Grey-box black key width (m); it keeps this width at any key spacing.")]
         [SerializeField] private float blackKeyWidth = 0.011f;
 
@@ -75,14 +77,8 @@ namespace HexRMeta.Learning
 
         /// <summary>Key spacing from the patient's fingertips (m).</summary>
         public float Spacing => spacing;
-        /// <summary>Key spacing as drawn (m): the same as Spacing unless the model hit maxModelWidth.</summary>
-        public float VisualSpacing => IsModel ? modelPitch * ModelScale() : spacing;
-
-        private float ModelScale()
-        {
-            float s = spacing / Mathf.Max(0.001f, modelPitch);
-            return Mathf.Min(s, maxModelWidth / Mathf.Max(0.01f, modelWidth));
-        }
+        /// <summary>Key spacing as drawn (m): Spacing, limited to minKeySpacing..maxKeySpacing on the model.</summary>
+        public float VisualSpacing => IsModel ? Mathf.Clamp(spacing, minKeySpacing, maxKeySpacing) : spacing;
 
         /// <summary>
         /// Key k sits under tipsByKey[k]; key tops end padOffset below the fingertip joints (mean height).
@@ -130,8 +126,20 @@ namespace HexRMeta.Learning
             if (IsModel)
             {
                 Vector3 sc = modelRoot.localScale;
-                modelRoot.localScale = new Vector3(ModelScale(), sc.y, sc.z);
+                modelRoot.localScale = new Vector3(1f, sc.y, sc.z);
                 float drawn = VisualSpacing;
+                float widen = drawn / Mathf.Max(0.001f, modelPitch);
+                // which way C..G runs in the model's own space (the model can be turned round)
+                float order = keyPivots[0] != null && keyPivots[4] != null &&
+                              keyPivots[4].localPosition.x < keyPivots[0].localPosition.x ? -1f : 1f;
+                for (int k = 0; k < 5; k++)
+                {
+                    if (keyPivots[k] == null) continue;
+                    Vector3 p = keyPivots[k].localPosition;
+                    keyPivots[k].localPosition = new Vector3(order * (k - 2) * drawn, widen > 1.001f ? overlapLift : 0f, p.z);
+                    Vector3 s = keyPivots[k].localScale;
+                    keyPivots[k].localScale = new Vector3(widen, s.y, s.z);
+                }
                 for (int k = 0; k < labels.Length; k++)
                     if (labels[k] != null) labels[k].transform.localPosition = new Vector3((k - 2) * drawn, 0.035f, back - 0.02f);
                 return;
