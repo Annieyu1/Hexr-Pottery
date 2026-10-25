@@ -192,7 +192,7 @@ L3 每个音输出两类数据：
 
 **实现情况（2026-10-25，按你的决定：只改五个键）**：
 - 模型模式：琴的其余部分保持原尺寸（白键 22 mm）；**只有 C–G 五个键按每次校准的手指间距移动和加宽**，范围 14–28 mm（`minKeySpacing` / `maxKeySpacing`）。加宽时五个键会盖住两侧的 B、A 键一部分，并抬高 1 mm 画在上面（`overlapLift`）。标签按画出来的键距摆放；`calibration.json` 新增 `key_visual_spacing_mm`。
-- 模型里的黑键是合并网格，**不跟着动**；键距不是 22 mm 时，五个键之间的黑键不在白键缝上。要彻底解决需要在 Blender 里拆开黑键（暂时不拆，2026-10-25）。
+- 黑键已拆开（2026-10-25）：`art/scripts/split_t2_black_keys.py` 把 Blender 文件里合并的 `T2_BlackKeys` 换成 20 个单独的 `Black_C#2` … `Black_A#5`（原点在键中心，其他物体不动），`build_t2_piano.py` 以后也直接生成单独黑键。Unity 里五个键之间的 C#4、D#4、F#4 按键距移动位置、宽度不变，其余黑键不动。重新导出时调色板格子重排了，`Assets/Art/Props/T2/Textures/Palette_Base.png` 已换成新图。
 - 灰模模式：黑键固定宽度 11 mm（`blackKeyWidth`），只跟着键距移动位置。
 
 ## 7. 痉挛、手张不开的患者（方案已通过）

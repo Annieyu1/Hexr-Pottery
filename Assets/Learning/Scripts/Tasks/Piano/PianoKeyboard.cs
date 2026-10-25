@@ -13,8 +13,9 @@ namespace HexRMeta.Learning
     /// Model mode (modelRoot set, e.g. Assets/Art/Props/T2/T2_Keyboard.fbx): the model keeps its
     /// size; only the five playable keys (C..G) are moved and widened to the patient's spacing from
     /// each calibration (2026-10-25), between minKeySpacing and maxKeySpacing. Wider keys reach over
-    /// the neighbouring keys (B, A) and sit overlapLift higher so they draw on top; the model's black
-    /// keys are one merged mesh and stay where they are.
+    /// the neighbouring keys (B, A) and sit overlapLift higher so they draw on top. The model's black
+    /// keys are one object each (2026-10-25): the three between C..G (C#4, D#4, F#4) move with the
+    /// spacing and keep their width; the others stay where they are.
     /// </summary>
     public class PianoKeyboard : MonoBehaviour
     {
@@ -48,13 +49,32 @@ namespace HexRMeta.Learning
         [Tooltip("Grey-box black key width (m); it keeps this width at any key spacing.")]
         [SerializeField] private float blackKeyWidth = 0.011f;
 
+        // where the black keys between C..G sit, in white-key pitches from E (build_t2_piano.py OFFS)
+        private static readonly float[] BlackAt = { -1.65f, -0.35f, 1.3f };
+        private static readonly string[] BlackNames = { "Black_C#4", "Black_D#4", "Black_F#4" };
+
         private readonly bool[] down = new bool[5];
         private Quaternion[] rest;
         private float[] tipSign;
 
         public bool IsModel => modelRoot != null;
 
-        private void Awake() { CaptureRest(); }
+        private void Awake()
+        {
+            FindModelBlackKeys();
+            CaptureRest();
+        }
+
+        /// <summary>Model mode: the black keys between C..G, found by name when the scene did not set them.</summary>
+        private void FindModelBlackKeys()
+        {
+            if (!IsModel) return;
+            if (blackKeys != null && blackKeys.Length == 3 && blackKeys[0] != null) return;
+            blackKeys = new Transform[3];
+            foreach (Transform t in modelRoot.GetComponentsInChildren<Transform>(true))
+                for (int j = 0; j < 3; j++)
+                    if (t.name == BlackNames[j]) blackKeys[j] = t;
+        }
 
         /// <summary>Rest rotation of each key, and which way round its local X is (model keys can be mirrored).</summary>
         private void CaptureRest()
@@ -139,6 +159,13 @@ namespace HexRMeta.Learning
                     keyPivots[k].localPosition = new Vector3(order * (k - 2) * drawn, widen > 1.001f ? overlapLift : 0f, p.z);
                     Vector3 s = keyPivots[k].localScale;
                     keyPivots[k].localScale = new Vector3(widen, s.y, s.z);
+                }
+                FindModelBlackKeys();
+                for (int j = 0; j < 3; j++)
+                {
+                    if (blackKeys[j] == null) continue;
+                    Vector3 p = blackKeys[j].localPosition;
+                    blackKeys[j].localPosition = new Vector3(order * BlackAt[j] * drawn, p.y, p.z);
                 }
                 for (int k = 0; k < labels.Length; k++)
                     if (labels[k] != null) labels[k].transform.localPosition = new Vector3((k - 2) * drawn, 0.035f, back - 0.02f);

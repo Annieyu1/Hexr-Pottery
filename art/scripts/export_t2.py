@@ -17,7 +17,9 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 exec(open(os.path.join(REPO, "art", "scripts", "palette.py")).read())
 
-flat = ["T2_Case", "T2_BlackKeys", "T2_MusicBooks_Mesh", "T2_CatFigurine_Mesh"]
+# black keys: one object each since 2026-10-25 (split_t2_black_keys.py); older files have T2_BlackKeys
+blacks = [o.name for o in bpy.data.objects if "black_key" in o] or ["T2_BlackKeys"]
+flat = ["T2_Case", "T2_MusicBooks_Mesh", "T2_CatFigurine_Mesh"] + blacks
 apply_palette(flat, TEX_DIR)
 
 report = []

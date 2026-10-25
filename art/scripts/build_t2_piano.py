@@ -9,8 +9,9 @@ Spec: docs/art/t2-piano-brief.md. Hard requirements (Unity code depends on them)
   * whole keyboard <= 12 mm below the key tops (it sits on the real table); the front lip stays below the key tops
   * playable keys C4..G4 are separate objects `Key_C` .. `Key_G`, origin at the hinge (back edge, top, centre),
     ONE material slot each (`T2_KeyWhite`, shared by all white keys; Unity swaps it to light a key)
-  * other white keys -> `T2_WhiteKeys_Static`, black keys -> `T2_BlackKeys`, case -> `T2_Case`
-  * white key pitch 22 mm (Unity scales the whole keyboard in X to the patient's finger spacing)
+  * other white keys -> `T2_WhiteKeys_Static`, black keys -> `Black_C#2` .. `Black_A#5` (one each, origin at the
+    key centre), case -> `T2_Case`
+  * white key pitch 22 mm (Unity moves and widens only Key_C..Key_G and moves the black keys between them)
 Range C2..C6 (four octaves, 2026-10-20: user wanted more keys): 29 white keys, 20 black keys. <= 4k triangles.
 """
 import bpy, bmesh, math, os
@@ -138,14 +139,19 @@ for i in range(N_WHITE):
 to_obj("T2_WhiteKeys_Static", bm, [m_white], col_kb, root)
 
 # ---- black keys (decorative). Offset like a real piano: C#/D# apart, F#/G#/A# spread.
+# One object per key, origin at its centre (2026-10-25): Unity moves the ones between the five
+# playable keys with the patient's finger spacing without making them wider.
 OFFS = {"C": -0.15, "D": 0.15, "F": -0.2, "G": 0.0, "A": 0.2}
-bm = bmesh.new()
 for i in range(N_WHITE - 1):
     n = WHITE[i % 7]
     if n not in OFFS: continue
     cx = (wx(i) + wx(i + 1))/2 + OFFS[n]*PITCH
-    box(bm, cx - 0.006, cx + 0.006, BACK - 0.080, BACK, -0.003, 0.008, 0, bevel=0.0007, taper=(0.18, 0.004))
-to_obj("T2_BlackKeys", bm, [m_black], col_kb, root)
+    cy, cz = BACK - 0.040, 0.0025
+    bm = bmesh.new()
+    box(bm, -0.006, 0.006, BACK - 0.080 - cy, BACK - cy, -0.003 - cz, 0.008 - cz, 0, bevel=0.0007, taper=(0.18, 0.004))
+    name = n + "#" + str(2 + i//7)
+    o = to_obj("Black_" + name, bm, [m_black], col_kb, root, (cx, cy, cz))
+    o["black_key"] = name
 
 # ---- case: base plate, low front lip, side cheeks, back panel with felt, screen, knobs, speaker slots
 Y_LIP0, Y_BACK0, Y_BACK1 = FRONT - 0.010, BACK + 0.001, BACK + 0.040

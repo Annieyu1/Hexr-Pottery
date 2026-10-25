@@ -279,7 +279,11 @@ namespace HexRMeta.Learning.EditorTools
 
             Set(keyboard, "keyPivots", pivots);
             Set(keyboard, "keyRenderers", rends);
-            Set(keyboard, "blackKeys", new Object[0]);
+            // black keys between C..G (one object each since 2026-10-25); PianoKeyboard also finds them by name
+            var blacks = new Object[3];
+            string[] blackNames = { "Black_C#4", "Black_D#4", "Black_F#4" };
+            for (int j = 0; j < 3; j++) blacks[j] = inst.transform.Find(blackNames[j]);
+            Set(keyboard, "blackKeys", blacks[0] != null ? blacks : new Object[0]);
             Set(keyboard, "labels", labels);
             Set(keyboard, "keyMaterial", white);
             Set(keyboard, "keyLitMaterial", lit);
