@@ -87,6 +87,7 @@ namespace HexRMeta.Learning
         public string[] rest_pose_mm = new string[5];
         public string[] press_pose_mm = new string[5];
         public float key_spacing_mm;
+        public float key_visual_spacing_mm;   // as drawn: smaller than key_spacing_mm when the keyboard hit its width cap
         public string keyboard_position;
         public float desk_shift_mm;     // VR rig moved up (+) / down (-) to line the real table up with the virtual desk
         // 5×5, row = finger lifted fully, column = how far that drags each finger (fraction of its own lift)

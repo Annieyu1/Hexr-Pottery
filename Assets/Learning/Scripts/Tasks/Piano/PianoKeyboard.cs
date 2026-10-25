@@ -12,6 +12,9 @@ namespace HexRMeta.Learning
     /// the real table) and spaces the keys to the patient's own finger spacing.
     /// Model mode (modelRoot set, e.g. Assets/Art/Props/T2/T2_Keyboard.fbx): the whole model is
     /// scaled in X to spacing / modelPitch and only the five key pivots tip; nothing else moves.
+    /// The scale is capped so the keyboard stays on the desk (maxModelWidth, 2026-10-25); with a wide
+    /// hand the five keys are then a little narrower than the fingers, which does not matter for the
+    /// judgment (key = finger). The model's black keys are one merged mesh, so they stretch with it.
     /// </summary>
     public class PianoKeyboard : MonoBehaviour
     {
@@ -36,6 +39,12 @@ namespace HexRMeta.Learning
         [SerializeField] private Transform modelRoot;
         [Tooltip("White-key pitch the model was built with (m).")]
         [SerializeField] private float modelPitch = 0.022f;
+        [Tooltip("Model width at scale 1 (m): T2_Keyboard.fbx, 29 white keys plus the case.")]
+        [SerializeField] private float modelWidth = 0.668f;
+        [Tooltip("The keyboard is never scaled wider than this (m); the study-room desk is 0.96 m.")]
+        [SerializeField] private float maxModelWidth = 0.75f;
+        [Tooltip("Grey-box black key width (m); it keeps this width at any key spacing.")]
+        [SerializeField] private float blackKeyWidth = 0.011f;
 
         private readonly bool[] down = new bool[5];
         private Quaternion[] rest;
@@ -64,7 +73,16 @@ namespace HexRMeta.Learning
             return isDown ? rest[k] * Quaternion.Euler(-pressDegrees * tipSign[k], 0f, 0f) : rest[k];
         }
 
+        /// <summary>Key spacing from the patient's fingertips (m).</summary>
         public float Spacing => spacing;
+        /// <summary>Key spacing as drawn (m): the same as Spacing unless the model hit maxModelWidth.</summary>
+        public float VisualSpacing => IsModel ? modelPitch * ModelScale() : spacing;
+
+        private float ModelScale()
+        {
+            float s = spacing / Mathf.Max(0.001f, modelPitch);
+            return Mathf.Min(s, maxModelWidth / Mathf.Max(0.01f, modelWidth));
+        }
 
         /// <summary>
         /// Key k sits under tipsByKey[k]; key tops end padOffset below the fingertip joints (mean height).
@@ -112,9 +130,10 @@ namespace HexRMeta.Learning
             if (IsModel)
             {
                 Vector3 sc = modelRoot.localScale;
-                modelRoot.localScale = new Vector3(spacing / Mathf.Max(0.001f, modelPitch), sc.y, sc.z);
+                modelRoot.localScale = new Vector3(ModelScale(), sc.y, sc.z);
+                float drawn = VisualSpacing;
                 for (int k = 0; k < labels.Length; k++)
-                    if (labels[k] != null) labels[k].transform.localPosition = new Vector3((k - 2) * spacing, 0.035f, back - 0.02f);
+                    if (labels[k] != null) labels[k].transform.localPosition = new Vector3((k - 2) * drawn, 0.035f, back - 0.02f);
                 return;
             }
             for (int k = 0; k < 5; k++)
@@ -139,7 +158,7 @@ namespace HexRMeta.Learning
                 if (blackKeys[j] == null) continue;
                 blackKeys[j].localPosition = new Vector3((between[j] - 1.5f) * spacing, 0.006f, back - 0.04f);
                 blackKeys[j].localRotation = Quaternion.identity;
-                if (resizeMeshes) blackKeys[j].localScale = new Vector3(spacing * 0.5f, 0.014f, 0.08f);
+                if (resizeMeshes) blackKeys[j].localScale = new Vector3(Mathf.Min(blackKeyWidth, spacing * 0.6f), 0.014f, 0.08f);
             }
             if (keyBase != null && resizeMeshes)
             {

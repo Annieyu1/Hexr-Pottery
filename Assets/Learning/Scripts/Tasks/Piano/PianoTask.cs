@@ -627,6 +627,7 @@ namespace HexRMeta.Learning
             if (keyboard != null)
             {
                 c.key_spacing_mm = keyboard.Spacing * 1000f;
+                c.key_visual_spacing_mm = keyboard.VisualSpacing * 1000f;
                 c.keyboard_position = PianoLog.Mm(keyboard.transform.position);
             }
             c.desk_shift_mm = deskShift * 1000f;
